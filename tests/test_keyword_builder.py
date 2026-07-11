@@ -198,7 +198,13 @@ def _make_dialog():
     dlg.preview_label = MagicMock()
 
     dlg.print_level = _Combo(
-        ["Additional Output (#P)", "Standard Output (#)", "Terse Output (#T)"], 0
+        [
+            "Additional Output (#P)",
+            "Normal Output (#N)",
+            "Normal Output (#)",
+            "Terse Output (#T)",
+        ],
+        0,
     )
     dlg.method_type = _Combo(["DFT", "Double Hybrid", "Wavefunction (MP2/CC)", "Hartree-Fock", "Semi-Empirical", "All Methods"], 0)
     dlg.method_name = _Combo(["B3LYP"], 0)

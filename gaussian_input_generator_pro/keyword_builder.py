@@ -200,7 +200,12 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
 
         self.print_level = QComboBox()
         self.print_level.addItems(
-            ["Additional Output (#P)", "Standard Output (#)", "Terse Output (#T)"]
+            [
+                "Additional Output (#P)",
+                "Normal Output (#N)",
+                "Normal Output (#)",
+                "Terse Output (#T)",
+            ]
         )
         self.print_level.setCurrentIndex(0)
         layout.addRow("Print Level:", self.print_level)
@@ -766,7 +771,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             return
         self.update_ui_state()
 
-        lvl_map = {0: "#P", 1: "#", 2: "#T"}
+        lvl_map = {0: "#P", 1: "#N", 2: "#", 3: "#T"}
         route_parts = [lvl_map.get(self.print_level.currentIndex(), "#P")]
 
         method = self.method_name.currentText()
@@ -967,10 +972,12 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         # Print level
         if "#P" in upper_tokens or any(t.upper().startswith("#P") for t in tokens):
             self.print_level.setCurrentIndex(0)
-        elif "#T" in upper_tokens or any(t.upper().startswith("#T") for t in tokens):
-            self.print_level.setCurrentIndex(2)
-        elif any(t.startswith("#") for t in tokens):
+        elif "#N" in upper_tokens or any(t.upper().startswith("#N") for t in tokens):
             self.print_level.setCurrentIndex(1)
+        elif "#T" in upper_tokens or any(t.upper().startswith("#T") for t in tokens):
+            self.print_level.setCurrentIndex(3)
+        elif any(t.startswith("#") for t in tokens):
+            self.print_level.setCurrentIndex(2)
 
         # Method/Basis: look for a token containing '/'
         for t in tokens:

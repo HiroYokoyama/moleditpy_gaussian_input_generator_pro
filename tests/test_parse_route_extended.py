@@ -187,7 +187,13 @@ def _make_dialog():
     dlg.preview_label = MagicMock()
 
     dlg.print_level = _Combo(
-        ["Additional Output (#P)", "Standard Output (#)", "Terse Output (#T)"], 0
+        [
+            "Additional Output (#P)",
+            "Normal Output (#N)",
+            "Normal Output (#)",
+            "Terse Output (#T)",
+        ],
+        0,
     )
     dlg.method_type = _Combo(
         ["DFT", "Double Hybrid", "Wavefunction (MP2/CC)", "Hartree-Fock", "Semi-Empirical", "All Methods"],
@@ -259,15 +265,20 @@ class TestParseRoutePrintLevel(unittest.TestCase):
         dlg.parse_route("#P B3LYP/6-31G(d) Opt")
         self.assertEqual(dlg.print_level.currentIndex(), 0)
 
-    def test_hash_t(self):
+    def test_hash_n(self):
         dlg = _make_dialog()
-        dlg.parse_route("#T B3LYP/6-31G(d) Opt")
-        self.assertEqual(dlg.print_level.currentIndex(), 2)
+        dlg.parse_route("#N B3LYP/6-31G(d) Opt")
+        self.assertEqual(dlg.print_level.currentIndex(), 1)
 
     def test_bare_hash(self):
         dlg = _make_dialog()
         dlg.parse_route("# B3LYP/6-31G(d) Opt")
-        self.assertEqual(dlg.print_level.currentIndex(), 1)
+        self.assertEqual(dlg.print_level.currentIndex(), 2)
+
+    def test_hash_t(self):
+        dlg = _make_dialog()
+        dlg.parse_route("#T B3LYP/6-31G(d) Opt")
+        self.assertEqual(dlg.print_level.currentIndex(), 3)
 
 
 class TestParseRouteMethodBasis(unittest.TestCase):
