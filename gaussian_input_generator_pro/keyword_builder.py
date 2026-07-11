@@ -48,6 +48,11 @@ from .constants import (
 
 
 _MODRED_PREFIXES = {1: "X", 2: "B", 3: "A", 4: "D"}
+_MODRED_PREFIX_COUNTS = {"X": 1, "B": 2, "A": 3, "D": 4}
+_MODRED_LINE_RE = re.compile(
+    r"^\s*([XBAD])((?:\s+\d+){1,4})\s+([FS])(?:\s+(\d+)\s+([0-9.eE+-]+))?\s*$",
+    re.IGNORECASE,
+)
 
 
 def format_modredundant_line(indices, is_scan=False, steps=10, step_size=0.1):
@@ -62,6 +67,27 @@ def format_modredundant_line(indices, is_scan=False, steps=10, step_size=0.1):
     if is_scan:
         return f"{prefix} {idx_str} S {int(steps)} {float(step_size):.2f}"
     return f"{prefix} {idx_str} F"
+
+
+def parse_modredundant_line(line):
+    """Parse a builder-format ModRedundant line.
+
+    Returns (indices_1based, is_scan, steps, step_size) or None when the
+    line is not a constraint line (Gen basis, $NBO, comments, ...).
+    """
+    m = _MODRED_LINE_RE.match(line)
+    if not m:
+        return None
+    prefix = m.group(1).upper()
+    indices = [int(x) for x in m.group(2).split()]
+    if _MODRED_PREFIX_COUNTS[prefix] != len(indices):
+        return None
+    is_scan = m.group(3).upper() == "S"
+    if is_scan and not m.group(4):
+        return None
+    steps = int(m.group(4)) if m.group(4) else 10
+    step_size = float(m.group(5)) if m.group(5) else 0.1
+    return indices, is_scan, steps, step_size
 
 
 def _split_route_tokens(route):
@@ -506,22 +532,33 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         n = len(self.selected_atoms)
         if n == 0 or not self.mol:
             return
+        indices_1based = [i + 1 for i in self.selected_atoms]
+        self._insert_constraint_row(indices_1based)
+        self.selected_atoms = []
+        self.update_selection_display()
+        self.update_preview()
 
-        indices = tuple(self.selected_atoms)  # 0-based
-        val = 0.0
+    def _insert_constraint_row(
+        self, indices_1based, is_scan=False, steps=10, step_size=None
+    ):
+        """Append a table row for the given 1-based atom indices."""
+        n = len(indices_1based)
         c_type = {1: "Atom", 2: "Distance", 3: "Angle", 4: "Dihedral"}.get(n, "")
+
+        val = 0.0
         try:
             from rdkit.Chem import rdMolTransforms
 
             conf = self.mol.GetConformer()
+            zero = [i - 1 for i in indices_1based]
             if n == 2:
-                val = rdMolTransforms.GetBondLength(conf, *indices)
+                val = rdMolTransforms.GetBondLength(conf, *zero)
             elif n == 3:
-                val = rdMolTransforms.GetAngleDeg(conf, *indices)
+                val = rdMolTransforms.GetAngleDeg(conf, *zero)
             elif n == 4:
-                val = rdMolTransforms.GetDihedralDeg(conf, *indices)
+                val = rdMolTransforms.GetDihedralDeg(conf, *zero)
         except Exception as _e:
-            logging.warning("add_constraint value calc failed: %s", _e)
+            logging.warning("constraint value calc failed: %s", _e)
 
         row = self.constraint_table.rowCount()
         self.constraint_table.insertRow(row)
@@ -532,11 +569,12 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             return item
 
         self.constraint_table.setItem(row, 0, create_centered_item(c_type))
-        idx_str = " ".join(str(i + 1) for i in indices)  # 1-based for Gaussian
+        idx_str = " ".join(str(i) for i in indices_1based)
         self.constraint_table.setItem(row, 1, create_centered_item(idx_str))
         self.constraint_table.setItem(row, 2, create_centered_item(f"{val:.3f}"))
 
         chk_scan = QCheckBox()
+        chk_scan.setChecked(is_scan)
         chk_widget = QWidget()
         chk_layout = QHBoxLayout(chk_widget)
         chk_layout.addWidget(chk_scan)
@@ -545,12 +583,21 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         self.constraint_table.setCellWidget(row, 3, chk_widget)
         chk_scan.stateChanged.connect(self.update_preview)
 
-        self.constraint_table.setItem(row, 4, create_centered_item("10"))
-        step = 0.1 if n == 2 else 10.0  # Å for bonds, degrees for angles/dihedrals
-        self.constraint_table.setItem(row, 5, create_centered_item(f"{step:.2f}"))
+        self.constraint_table.setItem(row, 4, create_centered_item(str(int(steps))))
+        if step_size is None:
+            step_size = 0.1 if n == 2 else 10.0  # Å for bonds, degrees otherwise
+        self.constraint_table.setItem(
+            row, 5, create_centered_item(f"{float(step_size):.2f}")
+        )
 
-        self.selected_atoms = []
-        self.update_selection_display()
+    def load_modredundant_lines(self, lines):
+        """Rebuild the constraint table from tail ModRedundant lines (sync in)."""
+        parsed = [
+            p for p in (parse_modredundant_line(line) for line in lines) if p
+        ]
+        self.constraint_table.setRowCount(0)
+        for indices, is_scan, steps, step_size in parsed:
+            self._insert_constraint_row(indices, is_scan, steps, step_size)
         self.update_preview()
 
     def remove_constraint(self):

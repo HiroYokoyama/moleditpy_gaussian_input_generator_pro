@@ -28,7 +28,7 @@ from rdkit import Chem
 from rdkit.Chem import rdMolTransforms
 
 from .highlighter import GaussianSyntaxHighlighter
-from .keyword_builder import GaussianRouteBuilderDialog
+from .keyword_builder import GaussianRouteBuilderDialog, parse_modredundant_line
 from .constants import TAIL_TEMPLATES
 from . import PLUGIN_NAME, PLUGIN_VERSION, SETTINGS_FILE
 import logging
@@ -731,6 +731,7 @@ class GaussianSetupDialogPro(QDialog):
         ):
             self.builder_dialog.parse_route(self.keywords_edit.toPlainText())
             self.builder_dialog.mol = self.mol
+            self._load_builder_constraints()
             self.builder_dialog.store_state()
             self.builder_dialog.show()
             self.builder_dialog.raise_()
@@ -743,16 +744,27 @@ class GaussianSetupDialogPro(QDialog):
             mol=self.mol,
             main_window=self.parent(),
         )
+        self._load_builder_constraints()
         self.builder_dialog.store_state()
         self.builder_dialog.finished.connect(lambda r: self.on_builder_finished(r))
         self.builder_dialog.show()
+
+    def _load_builder_constraints(self):
+        """Sync tail ModRedundant lines into the builder's constraint table."""
+        try:
+            _, modred = self._split_tail_modredundant(
+                self.tail_edit.toPlainText()
+            )
+            self.builder_dialog.load_modredundant_lines(modred)
+        except Exception as _e:
+            logging.warning("_load_builder_constraints: %s", _e)
 
     def on_builder_finished(self, result):
         if result == QDialog.DialogCode.Accepted:
             if getattr(self, "builder_dialog", None) is not None:
                 route = self.builder_dialog.get_route()
                 self.keywords_edit.setPlainText(route)
-                self._append_modredundant_lines()
+                self._sync_modredundant_lines()
                 self._auto_insert_tail_for_route(route)
         self.update_preview()
 
@@ -777,23 +789,44 @@ class GaussianSetupDialogPro(QDialog):
         text = current.rstrip() + "\n" if current.strip() else ""
         self.tail_edit.setPlainText(text + "\n".join(additions) + "\n")
 
-    def _append_modredundant_lines(self):
-        """Append the builder's ModRedundant lines to the tail (no duplicates)."""
+    @staticmethod
+    def _split_tail_modredundant(text):
+        """Split tail text into (other_lines, modredundant_lines)."""
+        others = []
+        modred = []
+        for line in text.splitlines():
+            if parse_modredundant_line(line):
+                modred.append(line.strip())
+            else:
+                others.append(line)
+        return others, modred
+
+    def _sync_modredundant_lines(self):
+        """Replace the tail's ModRedundant lines with the builder's table.
+
+        Full sync, not append: rows removed or edited in the builder's
+        Constraints/Scan tab disappear from / change in the tail too.
+        Non-constraint tail content (Gen basis, $NBO, ...) is preserved.
+        """
         builder = getattr(self, "builder_dialog", None)
         if builder is None:
             return
         try:
             new_lines = builder.get_modredundant_lines()
         except Exception as _e:
-            logging.warning("_append_modredundant_lines: %s", _e)
+            logging.warning("_sync_modredundant_lines: %s", _e)
             return
         current = self.tail_edit.toPlainText()
-        existing = {line.strip() for line in current.splitlines()}
-        to_add = [line for line in new_lines if line not in existing]
-        if not to_add:
+        others, old_lines = self._split_tail_modredundant(current)
+        if old_lines == new_lines:
             return
-        text = current.rstrip() + "\n" if current.strip() else ""
-        self.tail_edit.setPlainText(text + "\n".join(to_add) + "\n")
+        parts = []
+        other_text = "\n".join(others).rstrip()
+        if other_text.strip():
+            parts.append(other_text)
+        if new_lines:
+            parts.append("\n".join(new_lines))
+        self.tail_edit.setPlainText("\n".join(parts) + "\n" if parts else "")
 
     # ------------------------------------------------------------------
     # Save

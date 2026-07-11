@@ -110,6 +110,7 @@ _mixins_mod = _load_mod("mixins", "mixins.py")
 _md_mod = _load_mod("main_dialog", "main_dialog.py")
 
 format_modredundant_line = _kb_mod.format_modredundant_line
+parse_modredundant_line = _kb_mod.parse_modredundant_line
 GaussianRouteBuilderDialog = _kb_mod.GaussianRouteBuilderDialog
 Dialog3DPickingMixin = _mixins_mod.Dialog3DPickingMixin
 GaussianSetupDialogPro = _md_mod.GaussianSetupDialogPro
@@ -152,6 +153,36 @@ class TestFormatModredundantLine(unittest.TestCase):
             format_modredundant_line([])
         with self.assertRaises(ValueError):
             format_modredundant_line([1, 2, 3, 4, 5])
+
+
+class TestParseModredundantLine(unittest.TestCase):
+    def test_round_trip_freeze(self):
+        for indices in ([3], [1, 2], [1, 2, 3], [1, 2, 3, 4]):
+            line = format_modredundant_line(indices)
+            self.assertEqual(
+                parse_modredundant_line(line), (indices, False, 10, 0.1)
+            )
+
+    def test_round_trip_scan(self):
+        line = format_modredundant_line([1, 2], is_scan=True, steps=20, step_size=0.05)
+        self.assertEqual(parse_modredundant_line(line), ([1, 2], True, 20, 0.05))
+
+    def test_case_insensitive(self):
+        self.assertIsNotNone(parse_modredundant_line("b 1 2 f"))
+
+    def test_rejects_non_constraint_lines(self):
+        for line in [
+            "C H O 0",          # Gen basis atoms line
+            "6-31G(d)",
+            "****",
+            "$NBO",
+            "B 1 2",            # missing action
+            "B 1 2 3 F",        # wrong index count for B
+            "A 1 2 F",          # wrong index count for A
+            "B 1 2 S",          # scan without steps
+            "",
+        ]:
+            self.assertIsNone(parse_modredundant_line(line), line)
 
 
 # ---------------------------------------------------------------------------
@@ -329,35 +360,69 @@ class _FakeTailEdit:
         self._text = text
 
 
-class TestAppendModredundantLines(unittest.TestCase):
+class TestSyncModredundantLines(unittest.TestCase):
+    """Full two-way sync: the tail's constraint lines mirror the builder table."""
+
     def _make(self, tail_text, builder_lines):
         builder = SimpleNamespace(get_modredundant_lines=lambda: builder_lines)
-        return SimpleNamespace(
+        ns = SimpleNamespace(
             builder_dialog=builder, tail_edit=_FakeTailEdit(tail_text)
         )
+        ns._split_tail_modredundant = GaussianSetupDialogPro._split_tail_modredundant
+        return ns
 
     def _run(self, ns):
-        GaussianSetupDialogPro._append_modredundant_lines(ns)
+        GaussianSetupDialogPro._sync_modredundant_lines(ns)
 
     def test_append_to_empty_tail(self):
         ns = self._make("", ["B 1 2 F", "A 1 2 3 F"])
         self._run(ns)
         self.assertEqual(ns.tail_edit.toPlainText(), "B 1 2 F\nA 1 2 3 F\n")
 
-    def test_append_preserves_existing(self):
+    def test_preserves_non_constraint_content(self):
         ns = self._make("$NBO\n$END\n", ["B 1 2 F"])
         self._run(ns)
         self.assertEqual(ns.tail_edit.toPlainText(), "$NBO\n$END\nB 1 2 F\n")
 
-    def test_no_duplicate_lines(self):
-        ns = self._make("B 1 2 F\n", ["B 1 2 F"])
+    def test_removed_row_disappears_from_tail(self):
+        ns = self._make("B 1 2 F\nA 1 2 3 F\n", ["B 1 2 F"])
         self._run(ns)
         self.assertEqual(ns.tail_edit.toPlainText(), "B 1 2 F\n")
 
+    def test_cleared_table_removes_all_constraint_lines(self):
+        ns = self._make("$NBO\n$END\nB 1 2 F\nD 1 2 3 4 F\n", [])
+        self._run(ns)
+        self.assertEqual(ns.tail_edit.toPlainText(), "$NBO\n$END\n")
+
+    def test_clearing_everything_empties_tail(self):
+        ns = self._make("B 1 2 F\n", [])
+        self._run(ns)
+        self.assertEqual(ns.tail_edit.toPlainText(), "")
+
+    def test_edited_scan_replaces_freeze(self):
+        ns = self._make("B 1 2 F\n", ["B 1 2 S 10 0.10"])
+        self._run(ns)
+        self.assertEqual(ns.tail_edit.toPlainText(), "B 1 2 S 10 0.10\n")
+
+    def test_unchanged_is_noop(self):
+        ns = self._make("keepme\nB 1 2 F\n", ["B 1 2 F"])
+        self._run(ns)
+        # old == new -> early return, text untouched (order preserved)
+        self.assertEqual(ns.tail_edit.toPlainText(), "keepme\nB 1 2 F\n")
+
     def test_no_builder_is_noop(self):
         ns = SimpleNamespace(builder_dialog=None, tail_edit=_FakeTailEdit("x"))
-        self._run(ns)
+        GaussianSetupDialogPro._sync_modredundant_lines(ns)
         self.assertEqual(ns.tail_edit.toPlainText(), "x")
+
+
+class TestSplitTailModredundant(unittest.TestCase):
+    def test_split(self):
+        others, modred = GaussianSetupDialogPro._split_tail_modredundant(
+            "C H O 0\n6-31G(d)\n****\nB 1 2 F\nA 1 2 3 S 5 2.00\n"
+        )
+        self.assertEqual(modred, ["B 1 2 F", "A 1 2 3 S 5 2.00"])
+        self.assertEqual(others, ["C H O 0", "6-31G(d)", "****"])
 
 
 # ---------------------------------------------------------------------------
