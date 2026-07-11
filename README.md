@@ -100,6 +100,114 @@ One-click insertion of annotated templates:
 
 ---
 
+## Selected Examples
+
+### 1 — Standard geometry optimisation + frequency (DFT-D3BJ, SMD water)
+
+Route line produced by the Builder:
+
+```gjf
+%nprocshared=8
+%mem=16GB
+%chk=molecule.chk
+#P B3LYP/6-31G(d) EmpiricalDispersion=GD3BJ Opt Freq SCRF=(SMD,Solvent=Water)
+
+Title
+
+0 1
+ ...coordinates...
+```
+
+> Dispersion and solvation together in a single click; the preview updates live.
+
+---
+
+### 2 — Transition-state search with tight convergence
+
+```gjf
+#P wB97XD/def2TZVP Opt=(TS,CalcFC,NoEigenTest,VeryTight) Freq=NoRaman
+  SCRF=(SMD,Solvent=Acetonitrile) Integral(UltraFine)
+```
+
+> Builder sets TS job type, CalcFC, VeryTight opt, and UltraFine grid from separate dropdowns — no manual typing required.
+
+---
+
+### 3 — Bond-length relaxed scan (ModRedundant, interactive picking)
+
+Click two atoms in the MoleditPy 3D viewer → they appear as a Distance row in the Constraints/Scan table. Check **Scan**, set steps to 10 and step size to 0.05 Å.
+
+Tail section auto-populated:
+
+```gjf
+#P B3LYP/6-31G(d) Opt=ModRedundant
+
+...
+
+B 3 7 S 10 0.05
+```
+
+> Rows removed or edited in the builder table are **removed or corrected** in the tail automatically (two-way sync, new in v1.0.0).
+
+---
+
+### 4 — NBO charge analysis with automatic `$NBO` tail
+
+Select `Pop=NBORead` in the Builder → the tail section automatically gains:
+
+```gjf
+#P B3LYP/6-31G(d) Pop=NBORead
+
+...
+
+$NBO
+  BNDIDX NBOSUM
+$END
+```
+
+> The plugin detects `Pop=NBORead` in the route and inserts the `$NBO` block for you.
+
+---
+
+### 5 — TD-DFT excited states (5 singlets, CAM-B3LYP)
+
+```gjf
+#P CAM-B3LYP/aug-cc-pVDZ TD=(NStates=5,Singlets) SCRF=(PCM,Solvent=Acetonitrile)
+```
+
+> TD-DFT tab covers NStates, Singlets/Triplets/50-50, and Root; solvation is added simultaneously from the Solvation tab.
+
+---
+
+### 6 — Two-job Opt → Freq on checkpoint (`--Link1--`)
+
+Enable **Additional Job (--Link1--)** to chain a frequency run on the optimised geometry without re-running the optimisation:
+
+```gjf
+%nprocshared=8
+%mem=16GB
+%chk=molecule.chk
+#P B3LYP/6-31G(d) Opt
+
+Title
+
+0 1
+ ...coordinates...
+
+--Link1--
+%oldchk=molecule.chk
+%chk=molecule.chk
+#P B3LYP/6-31G(d) Freq Geom=Check Guess=Read
+
+Frequency on checkpoint
+
+0 1
+```
+
+> `%chk` / `%oldchk` are wired automatically; only the route and title of the second job need editing.
+
+---
+
 ## Installation
 
 1. Ensure MoleditPy is installed.

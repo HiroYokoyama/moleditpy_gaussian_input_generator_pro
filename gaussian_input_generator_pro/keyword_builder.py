@@ -139,13 +139,13 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
 
         self.tabs = QTabWidget()
 
-        self.tab_method = QWidget()
-        self.setup_method_tab()
-        self.tabs.addTab(self.tab_method, "Method/Basis")
-
         self.tab_job = QWidget()
         self.setup_job_tab()
         self.tabs.addTab(self.tab_job, "Job Type")
+
+        self.tab_method = QWidget()
+        self.setup_method_tab()
+        self.tabs.addTab(self.tab_method, "Method/Basis")
 
         self.tab_solvation = QWidget()
         self.setup_solvation_tab()
