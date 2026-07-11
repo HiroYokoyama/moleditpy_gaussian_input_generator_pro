@@ -151,6 +151,10 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         self.setup_solvation_tab()
         self.tabs.addTab(self.tab_solvation, "Solvation/Dispersion")
 
+        self.tab_tddft = QWidget()
+        self.setup_tddft_tab()
+        self.tabs.addTab(self.tab_tddft, "TD-DFT")
+
         self.tab_props = QWidget()
         self.setup_props_tab()
         self.tabs.addTab(self.tab_props, "Properties")
@@ -383,23 +387,6 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         self.grid_combo.addItems(GRID_OPTIONS)
         layout.addRow("Integration Grid:", self.grid_combo)
 
-        layout.addRow(QLabel("— TD-DFT / TDA —"))
-        self.td_method = QComboBox()
-        self.td_method.addItems(["None", "TD", "TDA"])
-        layout.addRow("Method:", self.td_method)
-        self.td_nstates = QSpinBox()
-        self.td_nstates.setRange(1, 500)
-        self.td_nstates.setValue(6)
-        layout.addRow("NStates:", self.td_nstates)
-        self.td_states_type = QComboBox()
-        self.td_states_type.addItems(["Default", "Singlets", "Triplets", "50-50"])
-        layout.addRow("States:", self.td_states_type)
-        self.td_root = QSpinBox()
-        self.td_root.setRange(0, 500)
-        self.td_root.setSpecialValueText("(default)")
-        self.td_root.setPrefix("Root=")
-        layout.addRow(self.td_root)
-
         layout.addRow(QLabel("— NMR / Polarizability —"))
         self.nmr_chk = QCheckBox("NMR (GIAO)")
         layout.addRow(self.nmr_chk)
@@ -433,6 +420,30 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         tab_layout.setContentsMargins(0, 0, 0, 0)
         tab_layout.addWidget(scroll)
         self.tab_props.setLayout(tab_layout)
+
+    def setup_tddft_tab(self):
+        layout = QFormLayout()
+
+        self.td_method = QComboBox()
+        self.td_method.addItems(["None", "TD", "TDA"])
+        layout.addRow("Method:", self.td_method)
+
+        self.td_nstates = QSpinBox()
+        self.td_nstates.setRange(1, 500)
+        self.td_nstates.setValue(6)
+        layout.addRow("NStates:", self.td_nstates)
+
+        self.td_states_type = QComboBox()
+        self.td_states_type.addItems(["Default", "Singlets", "Triplets", "50-50"])
+        layout.addRow("States:", self.td_states_type)
+
+        self.td_root = QSpinBox()
+        self.td_root.setRange(0, 500)
+        self.td_root.setSpecialValueText("(default)")
+        self.td_root.setPrefix("Root=")
+        layout.addRow("State of Interest:", self.td_root)
+
+        self.tab_tddft.setLayout(layout)
 
     def setup_constraints_tab(self):
         layout = QVBoxLayout()
