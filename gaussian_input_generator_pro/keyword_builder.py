@@ -1,5 +1,7 @@
+import logging
 import re
 from PyQt6 import QtCore
+from PyQt6.QtCore import Qt
 from PyQt6.QtWidgets import (
     QDialog,
     QVBoxLayout,
@@ -12,12 +14,16 @@ from PyQt6.QtWidgets import (
     QComboBox,
     QCompleter,
     QTabWidget,
+    QTableWidget,
+    QTableWidgetItem,
     QCheckBox,
     QWidget,
     QFormLayout,
     QSizePolicy,
     QScrollArea,
 )
+
+from .mixins import Dialog3DPickingMixin
 
 from .constants import (
     ALL_GAUSSIAN_METHODS,
@@ -39,6 +45,23 @@ from .constants import (
     GRID_OPTIONS,
     SCF_GUESS_OPTIONS,
 )
+
+
+_MODRED_PREFIXES = {1: "X", 2: "B", 3: "A", 4: "D"}
+
+
+def format_modredundant_line(indices, is_scan=False, steps=10, step_size=0.1):
+    """Format a Gaussian ModRedundant line from 1-based atom indices.
+
+    Freeze:  ``B 1 2 F``   Scan: ``B 1 2 S 10 0.10``
+    """
+    prefix = _MODRED_PREFIXES.get(len(indices))
+    if prefix is None:
+        raise ValueError(f"ModRedundant needs 1-4 atoms, got {len(indices)}")
+    idx_str = " ".join(str(i) for i in indices)
+    if is_scan:
+        return f"{prefix} {idx_str} S {int(steps)} {float(step_size):.2f}"
+    return f"{prefix} {idx_str} F"
 
 
 def _split_route_tokens(route):
@@ -64,11 +87,12 @@ def _split_route_tokens(route):
     return tokens
 
 
-class GaussianRouteBuilderDialog(QDialog):
+class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
     """Dialog to construct the Gaussian route (#) line."""
 
     def __init__(self, parent=None, current_route="", mol=None, main_window=None):
-        super().__init__(parent)
+        QDialog.__init__(self, parent)
+        Dialog3DPickingMixin.__init__(self)
         self.setWindowTitle("Gaussian Route Builder")
         self.resize(750, 650)
         self.setModal(False)
@@ -76,6 +100,7 @@ class GaussianRouteBuilderDialog(QDialog):
         self.current_route = current_route
         self.mol = mol
         self.main_window = main_window
+        self.selected_atoms = []
         self.setup_ui()
         self.parse_route(current_route)
 
@@ -103,6 +128,11 @@ class GaussianRouteBuilderDialog(QDialog):
         self.tab_props = QWidget()
         self.setup_props_tab()
         self.tabs.addTab(self.tab_props, "Properties")
+
+        self.tab_constraints = QWidget()
+        self.setup_constraints_tab()
+        self.tabs.addTab(self.tab_constraints, "Constraints/Scan")
+        self.tabs.currentChanged.connect(self.on_tab_changed)
 
         layout.addWidget(self.tabs)
 
@@ -372,6 +402,205 @@ class GaussianRouteBuilderDialog(QDialog):
         tab_layout.addWidget(scroll)
         self.tab_props.setLayout(tab_layout)
 
+    def setup_constraints_tab(self):
+        layout = QVBoxLayout()
+
+        info_label = QLabel(
+            "Select 1-4 atoms in the 3D view to add ModRedundant constraints "
+            "or scans.\n1: Atom (X), 2: Distance (B), 3: Angle (A), 4: Dihedral (D)\n"
+            "Lines are appended to Additional Input on Apply and require "
+            "Opt=ModRedundant (added automatically)."
+        )
+        info_label.setWordWrap(True)
+        layout.addWidget(info_label)
+
+        self.selection_label = QLabel("Selected atoms: None")
+        self.selection_label.setStyleSheet("font-weight: bold; color: #D32F2F;")
+        layout.addWidget(self.selection_label)
+
+        self.constraint_table = QTableWidget()
+        self.constraint_table.setColumnCount(6)
+        self.constraint_table.setHorizontalHeaderLabels(
+            ["Type", "Atoms (1-based)", "Value", "Scan?", "Steps", "Step Size"]
+        )
+        self.constraint_table.itemSelectionChanged.connect(
+            self.update_selection_display
+        )
+        self.constraint_table.itemChanged.connect(self.update_preview)
+        layout.addWidget(self.constraint_table)
+
+        btn_layout = QHBoxLayout()
+        self.btn_add_const = QPushButton("Add Constraint")
+        self.btn_add_const.setEnabled(False)
+        self.btn_add_const.clicked.connect(self.add_constraint)
+        btn_layout.addWidget(self.btn_add_const)
+
+        self.btn_remove_const = QPushButton("Remove Selected")
+        self.btn_remove_const.clicked.connect(self.remove_constraint)
+        btn_layout.addWidget(self.btn_remove_const)
+
+        self.btn_clear_const = QPushButton("Clear All")
+        self.btn_clear_const.clicked.connect(self.clear_all_constraints)
+        btn_layout.addWidget(self.btn_clear_const)
+
+        layout.addLayout(btn_layout)
+        self.tab_constraints.setLayout(layout)
+
+    # ------------------------------------------------------------------
+    # 3D picking (Dialog3DPickingMixin callbacks)
+    # ------------------------------------------------------------------
+
+    def on_tab_changed(self, index):
+        if self.tabs.currentWidget() == self.tab_constraints:
+            self.enable_picking()
+        else:
+            self.disable_picking()
+
+    def on_atom_picked(self, atom_idx):
+        if atom_idx in self.selected_atoms:
+            self.selected_atoms.remove(atom_idx)
+        else:
+            if len(self.selected_atoms) >= 4:
+                self.selected_atoms.pop(0)
+            self.selected_atoms.append(atom_idx)
+        self.update_selection_display()
+
+    def clear_selection(self):
+        self.selected_atoms = []
+        self.update_selection_display()
+
+    def update_selection_display(self):
+        all_to_label = []  # list of (idx, label_text)
+        for i, idx in enumerate(self.selected_atoms):
+            all_to_label.append((idx, f"P{i + 1}"))
+
+        selected_rows = set(
+            index.row() for index in self.constraint_table.selectedIndexes()
+        )
+        for row in selected_rows:
+            idx_item = self.constraint_table.item(row, 1)
+            if idx_item:
+                try:
+                    # Table shows 1-based indices; labels need 0-based
+                    row_indices = [int(i) - 1 for i in idx_item.text().split()]
+                    for i, idx in enumerate(row_indices):
+                        all_to_label.append((idx, f"C{row + 1}:A{i + 1}"))
+                except Exception as _e:
+                    logging.warning("update_selection_display: %s", _e)
+
+        self.show_atom_labels_for(all_to_label, color="yellow")
+
+        n = len(self.selected_atoms)
+        txt = "None"
+        can_add = False
+        if n > 0:
+            indices_txt = ", ".join(str(i + 1) for i in self.selected_atoms)
+            types = {1: "Atom", 2: "Distance", 3: "Angle", 4: "Dihedral"}
+            txt = f"[{indices_txt}] ({types.get(n, 'Unknown')})"
+            can_add = True
+
+        self.selection_label.setText(f"Selected atoms: {txt}")
+        self.btn_add_const.setEnabled(can_add)
+
+    def add_constraint(self):
+        n = len(self.selected_atoms)
+        if n == 0 or not self.mol:
+            return
+
+        indices = tuple(self.selected_atoms)  # 0-based
+        val = 0.0
+        c_type = {1: "Atom", 2: "Distance", 3: "Angle", 4: "Dihedral"}.get(n, "")
+        try:
+            from rdkit.Chem import rdMolTransforms
+
+            conf = self.mol.GetConformer()
+            if n == 2:
+                val = rdMolTransforms.GetBondLength(conf, *indices)
+            elif n == 3:
+                val = rdMolTransforms.GetAngleDeg(conf, *indices)
+            elif n == 4:
+                val = rdMolTransforms.GetDihedralDeg(conf, *indices)
+        except Exception as _e:
+            logging.warning("add_constraint value calc failed: %s", _e)
+
+        row = self.constraint_table.rowCount()
+        self.constraint_table.insertRow(row)
+
+        def create_centered_item(text):
+            item = QTableWidgetItem(text)
+            item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+            return item
+
+        self.constraint_table.setItem(row, 0, create_centered_item(c_type))
+        idx_str = " ".join(str(i + 1) for i in indices)  # 1-based for Gaussian
+        self.constraint_table.setItem(row, 1, create_centered_item(idx_str))
+        self.constraint_table.setItem(row, 2, create_centered_item(f"{val:.3f}"))
+
+        chk_scan = QCheckBox()
+        chk_widget = QWidget()
+        chk_layout = QHBoxLayout(chk_widget)
+        chk_layout.addWidget(chk_scan)
+        chk_layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        chk_layout.setContentsMargins(0, 0, 0, 0)
+        self.constraint_table.setCellWidget(row, 3, chk_widget)
+        chk_scan.stateChanged.connect(self.update_preview)
+
+        self.constraint_table.setItem(row, 4, create_centered_item("10"))
+        step = 0.1 if n == 2 else 10.0  # Å for bonds, degrees for angles/dihedrals
+        self.constraint_table.setItem(row, 5, create_centered_item(f"{step:.2f}"))
+
+        self.selected_atoms = []
+        self.update_selection_display()
+        self.update_preview()
+
+    def remove_constraint(self):
+        rows = set(index.row() for index in self.constraint_table.selectedIndexes())
+        for row in sorted(rows, reverse=True):
+            self.constraint_table.removeRow(row)
+        self.update_preview()
+
+    def clear_all_constraints(self):
+        self.constraint_table.setRowCount(0)
+        self.update_preview()
+
+    def get_modredundant_lines(self):
+        """Return the ModRedundant tail lines for all table rows."""
+        lines = []
+        table = getattr(self, "constraint_table", None)
+        if table is None:
+            return lines
+        for r in range(table.rowCount()):
+            idx_item = table.item(r, 1)
+            if not idx_item:
+                continue
+            try:
+                indices = [int(i) for i in idx_item.text().split()]
+            except ValueError:
+                continue
+
+            is_scan = False
+            chk_widget = table.cellWidget(r, 3)
+            if chk_widget:
+                chk_scan = chk_widget.findChild(QCheckBox)
+                if chk_scan:
+                    is_scan = chk_scan.isChecked()
+
+            steps_item = table.item(r, 4)
+            step_item = table.item(r, 5)
+            try:
+                steps = int(steps_item.text()) if steps_item else 10
+                step_size = float(step_item.text()) if step_item else 0.1
+            except ValueError:
+                steps, step_size = 10, 0.1
+
+            try:
+                lines.append(
+                    format_modredundant_line(indices, is_scan, steps, step_size)
+                )
+            except ValueError as _e:
+                logging.warning("get_modredundant_lines: %s", _e)
+        return lines
+
     # ------------------------------------------------------------------
     # State save/restore (for reopening the non-modal dialog in sync)
     # ------------------------------------------------------------------
@@ -521,6 +750,15 @@ class GaussianRouteBuilderDialog(QDialog):
             opt_opts.append("CalcAll")
         if self.opt_maxcycles.value() > 0:
             opt_opts.append(f"MaxCycles={self.opt_maxcycles.value()}")
+        # Constraint rows require Opt=ModRedundant (checked via getattr so
+        # this also works when update_preview is bound to test fakes)
+        _table = getattr(self, "constraint_table", None)
+        if _table is not None:
+            try:
+                if _table.rowCount() > 0:
+                    opt_opts.insert(0, "ModRedundant")
+            except Exception as _e:
+                logging.warning("constraint table check failed: %s", _e)
 
         freq_opts = []
         if self.freq_raman.isChecked():
@@ -536,8 +774,14 @@ class GaussianRouteBuilderDialog(QDialog):
             all_opts = list(opt_opts)
             if extra:
                 all_opts = extra + all_opts
-            if all_opts:
-                return f"Opt=({', '.join(all_opts)})"
+            seen = set()
+            uniq = []
+            for opt in all_opts:
+                if opt.upper() not in seen:
+                    uniq.append(opt)
+                    seen.add(opt.upper())
+            if uniq:
+                return f"Opt=({', '.join(uniq)})"
             return "Opt"
 
         def _freq_token():
@@ -641,6 +885,18 @@ class GaussianRouteBuilderDialog(QDialog):
 
     def get_route(self):
         return self.preview_str
+
+    def closeEvent(self, event):
+        self.disable_picking()
+        super().closeEvent(event)
+
+    def accept(self):
+        self.disable_picking()
+        super().accept()
+
+    def reject(self):
+        self.disable_picking()
+        super().reject()
 
     # ------------------------------------------------------------------
     # Best-effort round-trip parsing of an existing route string

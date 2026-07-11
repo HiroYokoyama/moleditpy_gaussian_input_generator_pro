@@ -16,6 +16,7 @@ Repo: [https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro](h
 - **Round-trip Parsing** — reopen the Route Builder on an existing route and settings are restored into the UI
 - **Link 0 Automation** — `%nprocshared`, `%mem`, `%chk` (auto-named from the saved filename), optional `%oldchk`
 - **Additional Job (`--Link1--`)** — append a second job that reads the checkpoint (`Geom=Check Guess=Read`) or copies the current geometry
+- **Interactive Constraints & Scans** — click atoms in the MoleditPy 3D viewer to define ModRedundant freeze/scan lines (distance/angle/dihedral); `Opt=ModRedundant` is added to the route automatically
 - **Tail Templates** — one-click insertion of `ModRedundant`, `Gen`/`GenECP` basis blocks, `$NBO`, connectivity, and `--Link1--` stubs
 - **Syntax Highlighting** — `.gjf` files get colour-coded Link 0 lines, route keywords, and job separators
 - **Session Persistence** — last-used settings are saved and restored between sessions

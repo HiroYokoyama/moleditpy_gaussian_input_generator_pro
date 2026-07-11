@@ -622,7 +622,26 @@ class GaussianSetupDialogPro(QDialog):
             if getattr(self, "builder_dialog", None) is not None:
                 route = self.builder_dialog.get_route()
                 self.keywords_edit.setPlainText(route)
+                self._append_modredundant_lines()
         self.update_preview()
+
+    def _append_modredundant_lines(self):
+        """Append the builder's ModRedundant lines to the tail (no duplicates)."""
+        builder = getattr(self, "builder_dialog", None)
+        if builder is None:
+            return
+        try:
+            new_lines = builder.get_modredundant_lines()
+        except Exception as _e:
+            logging.warning("_append_modredundant_lines: %s", _e)
+            return
+        current = self.tail_edit.toPlainText()
+        existing = {line.strip() for line in current.splitlines()}
+        to_add = [line for line in new_lines if line not in existing]
+        if not to_add:
+            return
+        text = current.rstrip() + "\n" if current.strip() else ""
+        self.tail_edit.setPlainText(text + "\n".join(to_add) + "\n")
 
     # ------------------------------------------------------------------
     # Save

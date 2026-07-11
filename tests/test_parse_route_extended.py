@@ -42,6 +42,8 @@ def _install_stubs():
         "QComboBox",
         "QCompleter",
         "QTabWidget",
+        "QTableWidget",
+        "QTableWidgetItem",
         "QCheckBox",
         "QFormLayout",
         "QSizePolicy",
