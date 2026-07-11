@@ -257,9 +257,59 @@ def _make_dialog():
     dlg.get_route = lambda: GaussianRouteBuilderDialog.get_route(dlg)
     dlg.parse_route = lambda route: GaussianRouteBuilderDialog.parse_route(dlg, route)
     dlg._parse_route_impl = lambda route: GaussianRouteBuilderDialog._parse_route_impl(dlg, route)
+    dlg.get_modredundant_lines = lambda: GaussianRouteBuilderDialog.get_modredundant_lines(dlg)
 
     dlg.update_preview()
     return dlg
+
+
+class _FakeConstraintChk:
+    def __init__(self, checked):
+        self._checked = checked
+
+    def isChecked(self):
+        return self._checked
+
+
+class _FakeConstraintChkWidget:
+    def __init__(self, checked):
+        self._chk = _FakeConstraintChk(checked)
+
+    def findChild(self, _cls):
+        return self._chk
+
+
+class _FakeConstraintItem:
+    def __init__(self, text):
+        self._text = text
+
+    def text(self):
+        return self._text
+
+
+class _FakeConstraintTable:
+    """rows: list of dicts {indices, scan, steps, step_size} (see get_modredundant_lines)."""
+
+    def __init__(self, rows):
+        self._rows = rows
+
+    def rowCount(self):
+        return len(self._rows)
+
+    def item(self, r, c):
+        row = self._rows[r]
+        if c == 1:
+            return _FakeConstraintItem(row["indices"])
+        if c == 4:
+            return _FakeConstraintItem(str(row.get("steps", 10)))
+        if c == 5:
+            return _FakeConstraintItem(str(row.get("step_size", 0.1)))
+        return None
+
+    def cellWidget(self, r, c):
+        if c == 3:
+            return _FakeConstraintChkWidget(self._rows[r].get("scan", False))
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -492,6 +542,78 @@ class TestRouteBuilderProperties(unittest.TestCase):
         dlg.update_preview()
         route = dlg.get_route()
         self.assertIn("Guess=Read", route)
+
+
+class TestScanRowForcesJobType(unittest.TestCase):
+    """A checked Scan? row must force the Scan (ModRedundant) job and drop Freq."""
+
+    def test_scan_row_forces_scan_job_and_no_freq(self):
+        dlg = _make_dialog()
+        dlg.job_type.setCurrentIndex(0)  # Optimization + Freq (Opt Freq)
+        dlg.constraint_table = _FakeConstraintTable(
+            [{"indices": "1 2", "scan": True, "steps": 10, "step_size": 0.1}]
+        )
+        dlg.update_preview()
+        route = dlg.get_route()
+        self.assertIn("Opt=(ModRedundant", route)
+        self.assertNotIn("Freq", route)
+        self.assertEqual(dlg.job_type.currentText(), "Scan (ModRedundant)")
+
+    def test_scan_row_overrides_freq_only_job(self):
+        dlg = _make_dialog()
+        dlg.job_type.setCurrentIndex(2)  # Frequency Only (Freq)
+        dlg.constraint_table = _FakeConstraintTable(
+            [{"indices": "1 2 3 4", "scan": True, "steps": 36, "step_size": 10.0}]
+        )
+        dlg.update_preview()
+        route = dlg.get_route()
+        self.assertIn("Opt=(ModRedundant", route)
+        self.assertNotIn("Freq", route)
+
+    def test_freeze_only_rows_preserve_opt_freq_job(self):
+        dlg = _make_dialog()
+        dlg.job_type.setCurrentIndex(0)  # Optimization + Freq (Opt Freq)
+        dlg.constraint_table = _FakeConstraintTable(
+            [{"indices": "1 2", "scan": False}]
+        )
+        dlg.update_preview()
+        route = dlg.get_route()
+        self.assertIn("Opt=(ModRedundant", route)
+        self.assertIn("Freq", route)
+        self.assertEqual(dlg.job_type.currentText(), "Optimization + Freq (Opt Freq)")
+
+    def test_no_rows_unchanged_behavior(self):
+        dlg = _make_dialog()
+        dlg.job_type.setCurrentIndex(0)  # Optimization + Freq (Opt Freq)
+        dlg.update_preview()
+        route = dlg.get_route()
+        self.assertNotIn("ModRedundant", route)
+        self.assertIn("Opt", route)
+        self.assertIn("Freq", route)
+        self.assertEqual(dlg.job_type.currentText(), "Optimization + Freq (Opt Freq)")
+
+
+class TestOptGroupVisibleForScanJob(unittest.TestCase):
+    """update_ui_state must show the Optimization Options group for the Scan job too."""
+
+    def test_is_opt_true_for_scan_job(self):
+        opt_group = MagicMock()
+        freq_group = MagicMock()
+        irc_group = MagicMock()
+        ns = types.SimpleNamespace(
+            ui_ready=True,
+            method_name=_Combo(["B3LYP"], 0),
+            job_type=_Combo(JOB_TYPES, JOB_TYPES.index("Scan (ModRedundant)")),
+            solv_model=_Combo(SOLVATION_MODELS, 0),
+            solvent=MagicMock(),
+            basis_set=MagicMock(),
+            second_basis=MagicMock(),
+            opt_group=opt_group,
+            freq_group=freq_group,
+            irc_group=irc_group,
+        )
+        GaussianRouteBuilderDialog.update_ui_state(ns)
+        opt_group.setVisible.assert_called_with(True)
 
 
 class TestSemiEmpiricalMethod(unittest.TestCase):

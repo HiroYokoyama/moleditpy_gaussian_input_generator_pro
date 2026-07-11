@@ -764,7 +764,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         self.second_basis.setEnabled(not is_semi)
 
         job_txt = self.job_type.currentText()
-        is_opt = "Opt" in job_txt
+        is_opt = "Opt" in job_txt or "Scan" in job_txt
         is_freq = "Freq" in job_txt
         is_irc = "IRC" in job_txt
         self.opt_group.setVisible(is_opt)
@@ -799,6 +799,39 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             if second:
                 mb += f"//{method}/{second}"
             route_parts.append(mb)
+
+        # A relaxed PES scan (ModRedundant "S" row) is chemically incompatible
+        # with a trailing Freq in the same job step (gaussian.com/opt scan
+        # syntax: "B 1 2 S nsteps stepsize"). If any constraint row is a scan,
+        # force the job onto the dedicated Scan (ModRedundant) job type so the
+        # branch below never emits Freq, even if the previous job was
+        # "Opt Freq" or "Freq Only". Guarded so SimpleNamespace test fakes
+        # without a constraint_table (or without blockSignals) still work.
+        try:
+            has_scan_row = any(
+                parse_modredundant_line(line) and parse_modredundant_line(line)[1]
+                for line in self.get_modredundant_lines()
+            )
+        except Exception as _e:
+            has_scan_row = False
+            logging.warning("scan row detection failed: %s", _e)
+
+        if has_scan_row:
+            try:
+                scan_job_txt = next(
+                    j for j in JOB_TYPES if j.startswith("Scan")
+                )
+                if self.job_type.currentText() != scan_job_txt:
+                    has_block = hasattr(self.job_type, "blockSignals")
+                    if has_block:
+                        self.job_type.blockSignals(True)
+                    try:
+                        self.job_type.setCurrentText(scan_job_txt)
+                    finally:
+                        if has_block:
+                            self.job_type.blockSignals(False)
+            except Exception as _e:
+                logging.warning("force scan job type failed: %s", _e)
 
         # Job type
         job_idx = self.job_type.currentIndex()
