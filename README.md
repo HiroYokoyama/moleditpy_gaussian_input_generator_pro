@@ -1,5 +1,6 @@
 # MoleditPy Gaussian Input Generator Pro
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21307661.svg)](https://doi.org/10.5281/zenodo.21307661)
 [![Tests](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/actions/workflows/tests.yml/badge.svg)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/actions/workflows/tests.yml)
 [![Downloads](https://img.shields.io/github/downloads/HiroYokoyama/moleditpy_gaussian_input_generator_pro/total)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/releases)
 
