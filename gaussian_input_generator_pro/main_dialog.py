@@ -753,7 +753,29 @@ class GaussianSetupDialogPro(QDialog):
                 route = self.builder_dialog.get_route()
                 self.keywords_edit.setPlainText(route)
                 self._append_modredundant_lines()
+                self._auto_insert_tail_for_route(route)
         self.update_preview()
+
+    def _auto_insert_tail_for_route(self, route):
+        """Insert required tail sections implied by route keywords.
+
+        Mirrors ORCA Pro's _auto_insert_blocks_for_route: Pop=NBORead is
+        meaningless without a $NBO section after the coordinates.
+        """
+        route_upper = route.upper()
+        current = self.tail_edit.toPlainText()
+        current_upper = current.upper()
+
+        additions = []
+        if "POP=NBOREAD" in route_upper and "$NBO" not in current_upper:
+            nbo = TAIL_TEMPLATES.get("NBO Analysis ($NBO)")
+            if nbo:
+                additions.append(nbo.rstrip("\n"))
+
+        if not additions:
+            return
+        text = current.rstrip() + "\n" if current.strip() else ""
+        self.tail_edit.setPlainText(text + "\n".join(additions) + "\n")
 
     def _append_modredundant_lines(self):
         """Append the builder's ModRedundant lines to the tail (no duplicates)."""

@@ -360,5 +360,45 @@ class TestAppendModredundantLines(unittest.TestCase):
         self.assertEqual(ns.tail_edit.toPlainText(), "x")
 
 
+# ---------------------------------------------------------------------------
+# Main dialog: auto-insert of route-implied tail sections ($NBO)
+# ---------------------------------------------------------------------------
+
+
+class TestAutoInsertTailForRoute(unittest.TestCase):
+    def _run(self, route, tail_text=""):
+        ns = SimpleNamespace(tail_edit=_FakeTailEdit(tail_text))
+        GaussianSetupDialogPro._auto_insert_tail_for_route(ns, route)
+        return ns.tail_edit.toPlainText()
+
+    def test_nboread_inserts_nbo_section(self):
+        tail = self._run("#P B3LYP/6-31G(d) Pop=NBORead Opt")
+        self.assertIn("$NBO", tail)
+        self.assertIn("$END", tail)
+
+    def test_case_insensitive_route_match(self):
+        tail = self._run("#p b3lyp/6-31g(d) pop=nboread")
+        self.assertIn("$NBO", tail)
+
+    def test_plain_pop_nbo_does_not_insert(self):
+        tail = self._run("#P B3LYP/6-31G(d) Pop=NBO")
+        self.assertEqual(tail, "")
+
+    def test_existing_nbo_section_not_duplicated(self):
+        existing = "$NBO\n  BNDIDX\n$END\n"
+        tail = self._run("#P B3LYP/6-31G(d) Pop=NBORead", existing)
+        self.assertEqual(tail, existing)
+        self.assertEqual(tail.upper().count("$NBO"), 1)
+
+    def test_existing_tail_content_preserved(self):
+        tail = self._run("#P HF/6-31G(d) Pop=NBORead", "B 1 2 F\n")
+        self.assertTrue(tail.startswith("B 1 2 F\n"))
+        self.assertIn("$NBO", tail)
+
+    def test_route_without_nbo_is_noop(self):
+        tail = self._run("#P B3LYP/6-31G(d) Opt Freq", "B 1 2 F\n")
+        self.assertEqual(tail, "B 1 2 F\n")
+
+
 if __name__ == "__main__":
     unittest.main()
