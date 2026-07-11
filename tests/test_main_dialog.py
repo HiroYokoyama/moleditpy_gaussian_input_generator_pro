@@ -219,6 +219,8 @@ def _make_dialog(
 
     _coords = coords if coords is not None else ["C     0.000000     0.000000     0.000000"]
     dlg.get_coords_lines = lambda: _coords
+    # No coord_format_combo on the fake -> dispatches to Cartesian
+    dlg._get_active_coord_lines = lambda: GaussianSetupDialogPro._get_active_coord_lines(dlg)
 
     dlg._mem_line = lambda: GaussianSetupDialogPro._mem_line(dlg)
     dlg._wfn_filename_hint = lambda: GaussianSetupDialogPro._wfn_filename_hint(dlg)

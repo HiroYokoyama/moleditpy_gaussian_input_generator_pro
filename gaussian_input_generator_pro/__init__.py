@@ -28,6 +28,7 @@ def get_default_settings():
         "link1_geom_src": "Checkpoint (Geom=Check Guess=Read)",
         "link1_tail": "",
         "oldchk": "",
+        "coord_format": "Cartesian (XYZ)",
     }
 
 

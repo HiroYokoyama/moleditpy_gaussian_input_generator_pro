@@ -25,6 +25,7 @@ from PyQt6.QtGui import QFont, QPalette, QColor, QKeySequence, QShortcut
 from PyQt6.QtCore import Qt
 
 from rdkit import Chem
+from rdkit.Chem import rdMolTransforms
 
 from .highlighter import GaussianSyntaxHighlighter
 from .keyword_builder import GaussianRouteBuilderDialog
@@ -206,6 +207,22 @@ class GaussianSetupDialogPro(QDialog):
         self.default_palette = self.charge_spin.palette()
         mol_group.setLayout(mol_layout)
         settings_layout.addWidget(mol_group)
+
+        # --- Coordinate Format ---
+        coord_group = QGroupBox("Coordinate Format")
+        coord_layout = QVBoxLayout()
+        self.coord_format_combo = QComboBox()
+        self.coord_format_combo.addItems(
+            [
+                "Cartesian (XYZ)",
+                "Z-Matrix",
+                "Z-Matrix (variables)",
+            ]
+        )
+        self.coord_format_combo.currentIndexChanged.connect(self.update_preview)
+        coord_layout.addWidget(self.coord_format_combo)
+        coord_group.setLayout(coord_layout)
+        settings_layout.addWidget(coord_group)
 
         # --- Tail / Additional Input ---
         tail_group = QGroupBox("Tail / Additional Input")
@@ -392,6 +409,113 @@ class GaussianSetupDialogPro(QDialog):
             return [f"# Error: {e}"]
         return lines
 
+    def _build_zmatrix_data(self):
+        """Build Z-matrix connectivity and internal-coordinate values.
+
+        Returns a list of {"symbol", "refs" (0-based), "values"} dicts,
+        one per atom, or None when no molecule is available.
+        """
+        if not self._resolve_live_mol():
+            return None
+        atoms = list(self.mol.GetAtoms())
+        conf = self.mol.GetConformer()
+
+        defined = []
+        z_data = []
+
+        for i, atom in enumerate(atoms):
+            symbol = (
+                atom.GetProp("custom_symbol")
+                if atom.HasProp("custom_symbol")
+                else atom.GetSymbol()
+            )
+
+            if i == 0:
+                z_data.append({"symbol": symbol, "refs": [], "values": []})
+                defined.append(i)
+                continue
+
+            neighbors = [n.GetIdx() for n in atom.GetNeighbors()]
+            candidates = [n for n in neighbors if n in defined]
+            if not candidates:
+                candidates = defined[:]
+
+            refs = [candidates[-1] if candidates else 0]
+            candidates_2 = [x for x in defined if x != refs[0]]
+            if candidates_2:
+                refs.append(candidates_2[-1])
+            candidates_3 = [x for x in defined if x not in refs]
+            if candidates_3:
+                refs.append(candidates_3[-1])
+
+            row = {"symbol": symbol, "refs": [], "values": []}
+            if len(refs) >= 1:
+                row["refs"].append(refs[0])
+                row["values"].append(rdMolTransforms.GetBondLength(conf, i, refs[0]))
+            if len(refs) >= 2:
+                row["refs"].append(refs[1])
+                row["values"].append(
+                    rdMolTransforms.GetAngleDeg(conf, i, refs[0], refs[1])
+                )
+            if len(refs) >= 3:
+                row["refs"].append(refs[2])
+                row["values"].append(
+                    rdMolTransforms.GetDihedralDeg(conf, i, refs[0], refs[1], refs[2])
+                )
+
+            z_data.append(row)
+            defined.append(i)
+
+        return z_data
+
+    def get_zmatrix_lines(self, use_variables=False):
+        """Generate Gaussian Z-matrix lines (1-based references).
+
+        Plain:      H  1 1.089000  2 109.471000  3 120.000000
+        Variables:  H  1 B3  2 A3  3 D3   ...   Variables: / B3=1.089000
+        """
+        try:
+            data = self._build_zmatrix_data()
+            if not data:
+                return []
+
+            lines = []
+            var_lines = []
+            for i, row in enumerate(data):
+                line = f"{row['symbol']: <4}"
+                refs = row["refs"]
+                vals = row["values"]
+                var_names = ("B", "A", "D")
+                for k in range(min(3, len(refs))):
+                    if use_variables:
+                        name = f"{var_names[k]}{i + 1}"
+                        line += f"  {refs[k] + 1: >3} {name}"
+                        var_lines.append(f" {name}={vals[k]:.6f}")
+                    else:
+                        line += f"  {refs[k] + 1: >3} {vals[k]: >11.6f}"
+                lines.append(line.rstrip())
+
+            if use_variables and var_lines:
+                lines.append("Variables:")
+                lines.extend(var_lines)
+            return lines
+        except Exception as e:
+            return [f"! Error generating Z-Matrix: {e}"]
+
+    def _get_active_coord_lines(self):
+        """Coordinate lines in the selected format (Cartesian fallback)."""
+        combo = getattr(self, "coord_format_combo", None)
+        style = combo.currentText() if combo is not None else "Cartesian (XYZ)"
+        if "Z-Matrix" in style:
+            zmat = self.get_zmatrix_lines(use_variables="variables" in style)
+            if zmat and not any("Error" in line for line in zmat):
+                return zmat
+            # Fall back to Cartesian if Z-matrix generation failed
+            return ["! Z-Matrix generation failed; using Cartesian"] + (
+                self.get_coords_lines()
+            )
+        return self.get_coords_lines()
+
     # ------------------------------------------------------------------
     # Preview / generation
     # ------------------------------------------------------------------
@@ -415,6 +539,7 @@ class GaussianSetupDialogPro(QDialog):
             p["link1_title"] = self.link1_title_edit.text()
             p["link1_geom_src"] = self.link1_geom_src.currentText()
             p["link1_tail"] = self.link1_tail_edit.toPlainText()
+            p["coord_format"] = self.coord_format_combo.currentText()
 
         self._current_content = self.generate_input_content()
         self.preview_text.setText(self._current_content)
@@ -458,6 +583,8 @@ class GaussianSetupDialogPro(QDialog):
                 self.link1_geom_src.setCurrentText(p["link1_geom_src"])
             if "link1_tail" in p:
                 self.link1_tail_edit.setPlainText(p["link1_tail"])
+            if "coord_format" in p:
+                self.coord_format_combo.setCurrentText(p["coord_format"])
             self._update_link1_ui()
         finally:
             self.blockSignals(False)
@@ -536,7 +663,7 @@ class GaussianSetupDialogPro(QDialog):
 
         lines.append(f"{charge} {mult}")
 
-        coord_lines = self.get_coords_lines()
+        coord_lines = self._get_active_coord_lines()
         if any("Error" in line for line in coord_lines):
             err = "\n".join(line for line in coord_lines if "Error" in line)
             return f"# Error generating coordinates: {err}"
@@ -651,7 +778,7 @@ class GaussianSetupDialogPro(QDialog):
     # ------------------------------------------------------------------
 
     def save_file(self):
-        coord_lines = self.get_coords_lines()
+        coord_lines = self._get_active_coord_lines()
         if any("Error" in line for line in coord_lines):
             err = "\n".join(line for line in coord_lines if "Error" in line)
             QMessageBox.critical(self, "Error", f"Coordinate Generation Failed:\n{err}")
@@ -757,6 +884,7 @@ class GaussianSetupDialogPro(QDialog):
                 "link1_title": "Generated by MoleditPy Gaussian Input Generator Pro Plugin",
                 "link1_geom_src": "Checkpoint (Geom=Check Guess=Read)",
                 "link1_tail": "",
+                "coord_format": "Cartesian (XYZ)",
             }
 
         if "Global" in self.presets_data:
@@ -802,6 +930,9 @@ class GaussianSetupDialogPro(QDialog):
         if src:
             self.link1_geom_src.setCurrentText(src)
         self.link1_tail_edit.setPlainText(data.get("link1_tail", ""))
+        self.coord_format_combo.setCurrentText(
+            data.get("coord_format", "Cartesian (XYZ)")
+        )
         self._update_link1_ui()
         self.update_preview()
 
@@ -820,6 +951,7 @@ class GaussianSetupDialogPro(QDialog):
                 "link1_route": self.link1_route_edit.toPlainText(),
                 "link1_geom_src": self.link1_geom_src.currentText(),
                 "link1_tail": self.link1_tail_edit.toPlainText(),
+                "coord_format": self.coord_format_combo.currentText(),
             }
             self.save_presets_to_file()
             self.update_preset_combo()
