@@ -204,7 +204,7 @@ def _make_dialog():
             "Normal Output (#)",
             "Terse Output (#T)",
         ],
-        0,
+        2,
     )
     dlg.method_type = _Combo(["DFT", "Double Hybrid", "Wavefunction (MP2/CC)", "Hartree-Fock", "Semi-Empirical", "All Methods"], 0)
     dlg.method_name = _Combo(["B3LYP"], 0)
@@ -295,7 +295,8 @@ class TestRouteBuilderDefaults(unittest.TestCase):
     def test_default_route_has_print_level_and_slash(self):
         dlg = _make_dialog()
         route = dlg.get_route()
-        self.assertTrue(route.startswith("#P"))
+        self.assertTrue(route.startswith("#"))
+        self.assertFalse(route.startswith("#P"))
         self.assertIn("/", route)
 
     def test_opt_freq_job(self):

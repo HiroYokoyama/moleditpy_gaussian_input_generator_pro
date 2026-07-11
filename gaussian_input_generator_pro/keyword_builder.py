@@ -207,7 +207,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
                 "Terse Output (#T)",
             ]
         )
-        self.print_level.setCurrentIndex(0)
+        self.print_level.setCurrentIndex(2)
         layout.addRow("Print Level:", self.print_level)
 
         self.method_type = QComboBox()

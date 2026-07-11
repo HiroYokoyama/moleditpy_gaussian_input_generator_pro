@@ -193,7 +193,7 @@ def _make_dialog():
             "Normal Output (#)",
             "Terse Output (#T)",
         ],
-        0,
+        2,
     )
     dlg.method_type = _Combo(
         ["DFT", "Double Hybrid", "Wavefunction (MP2/CC)", "Hartree-Fock", "Semi-Empirical", "All Methods"],
