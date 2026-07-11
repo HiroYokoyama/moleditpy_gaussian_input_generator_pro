@@ -592,6 +592,27 @@ class TestScanRowForcesJobType(unittest.TestCase):
         self.assertIn("Freq", route)
         self.assertEqual(dlg.job_type.currentText(), "Optimization + Freq (Opt Freq)")
 
+    def test_freq_group_hidden_within_same_update_preview_call(self):
+        """The scan job must be forced BEFORE update_ui_state() runs so the
+        Freq Options group box hides immediately, not one update cycle late
+        (job_type.currentIndexChanged is blockSignals-suppressed while
+        forcing, so nothing else would trigger a follow-up refresh)."""
+        dlg = _make_dialog()
+        dlg.job_type.setCurrentIndex(0)  # Optimization + Freq (Opt Freq)
+        dlg.update_ui_state = lambda: GaussianRouteBuilderDialog.update_ui_state(dlg)
+        dlg.opt_group = MagicMock()
+        dlg.freq_group = MagicMock()
+        dlg.irc_group = MagicMock()
+        dlg.basis_set = MagicMock()
+        dlg.second_basis = MagicMock()
+        dlg.solvent = MagicMock()
+        dlg.constraint_table = _FakeConstraintTable(
+            [{"indices": "1 2", "scan": True, "steps": 10, "step_size": 0.1}]
+        )
+        dlg.update_preview()
+        dlg.freq_group.setVisible.assert_called_with(False)
+        dlg.opt_group.setVisible.assert_called_with(True)
+
 
 class TestOptGroupVisibleForScanJob(unittest.TestCase):
     """update_ui_state must show the Optimization Options group for the Scan job too."""

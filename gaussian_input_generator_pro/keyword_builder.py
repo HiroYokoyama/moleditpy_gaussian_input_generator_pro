@@ -781,32 +781,16 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
     def update_preview(self):
         if not getattr(self, "ui_ready", False):
             return
-        self.update_ui_state()
-
-        lvl_map = {0: "#P", 1: "#N", 2: "#", 3: "#T"}
-        route_parts = [lvl_map.get(self.print_level.currentIndex(), "#P")]
-
-        method = self.method_name.currentText()
-        method_upper = method.upper()
-        is_semi = method_upper in [m.upper() for m in SEMI_EMPIRICAL_METHODS]
-
-        if is_semi:
-            route_parts.append(method)
-        else:
-            basis = self.basis_set.currentText()
-            mb = f"{method}/{basis}" if basis else method
-            second = self.second_basis.text().strip()
-            if second:
-                mb += f"//{method}/{second}"
-            route_parts.append(mb)
 
         # A relaxed PES scan (ModRedundant "S" row) is chemically incompatible
         # with a trailing Freq in the same job step (gaussian.com/opt scan
         # syntax: "B 1 2 S nsteps stepsize"). If any constraint row is a scan,
-        # force the job onto the dedicated Scan (ModRedundant) job type so the
-        # branch below never emits Freq, even if the previous job was
-        # "Opt Freq" or "Freq Only". Guarded so SimpleNamespace test fakes
-        # without a constraint_table (or without blockSignals) still work.
+        # force the job onto the dedicated Scan (ModRedundant) job type before
+        # update_ui_state()/the route branch below run, so the Freq Options
+        # group and the emitted route both reflect it immediately -- even if
+        # the previous job was "Opt Freq" or "Freq Only". Guarded so
+        # SimpleNamespace test fakes without a constraint_table (or without
+        # blockSignals) still work.
         try:
             has_scan_row = any(
                 parse_modredundant_line(line) and parse_modredundant_line(line)[1]
@@ -832,6 +816,25 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
                             self.job_type.blockSignals(False)
             except Exception as _e:
                 logging.warning("force scan job type failed: %s", _e)
+
+        self.update_ui_state()
+
+        lvl_map = {0: "#P", 1: "#N", 2: "#", 3: "#T"}
+        route_parts = [lvl_map.get(self.print_level.currentIndex(), "#P")]
+
+        method = self.method_name.currentText()
+        method_upper = method.upper()
+        is_semi = method_upper in [m.upper() for m in SEMI_EMPIRICAL_METHODS]
+
+        if is_semi:
+            route_parts.append(method)
+        else:
+            basis = self.basis_set.currentText()
+            mb = f"{method}/{basis}" if basis else method
+            second = self.second_basis.text().strip()
+            if second:
+                mb += f"//{method}/{second}"
+            route_parts.append(mb)
 
         # Job type
         job_idx = self.job_type.currentIndex()
