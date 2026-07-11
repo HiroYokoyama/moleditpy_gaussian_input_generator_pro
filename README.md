@@ -63,7 +63,7 @@ AM1, PM3, PM6, PM7, ZINDO
 - **Pople**: 6-31G(d), 6-31+G(d,p), 6-311+G(d,p), 6-311++G(2d,2p), 6-311++G(3df,3pd), …
 - **Dunning**: cc-pVDZ/TZ/QZ/5Z, aug-cc-pVDZ/TZ/QZ/5Z
 - **Karlsruhe (def2)**: def2SVP, def2TZVP, def2TZVPP, def2QZVP
-- **ECP / Gen**: LanL2DZ, LanL2MB, LanL08, SDD, SDDAll, Gen, GenECP
+- **ECP / Gen**: LanL2DZ, LanL2MB, SDD, SDDAll, Gen, GenECP
 
 ---
 

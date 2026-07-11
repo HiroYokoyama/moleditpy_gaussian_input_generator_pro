@@ -409,12 +409,19 @@ class TestRewriteChk(unittest.TestCase):
         self.assertIn("%chk=saved_name.chk", result)
         self.assertNotIn("old.chk", result)
 
-    def test_only_first_chk_line_rewritten(self):
+    def test_all_chk_lines_rewritten(self):
+        # The --Link1-- section repeats %chk to read Job 1's checkpoint;
+        # both must follow the saved filename or Job 2 reads a stale file.
         content = "%chk=old1.chk\n--Link1--\n%chk=old1.chk\n"
         result = GaussianSetupDialogPro._rewrite_chk(content, "new")
         lines = [l for l in result.splitlines() if l.startswith("%chk=")]
-        self.assertEqual(lines[0], "%chk=new.chk")
-        self.assertEqual(lines[1], "%chk=old1.chk")
+        self.assertEqual(lines, ["%chk=new.chk", "%chk=new.chk"])
+
+    def test_oldchk_line_not_rewritten(self):
+        content = "%oldchk=prev.chk\n%chk=old1.chk\n"
+        result = GaussianSetupDialogPro._rewrite_chk(content, "new")
+        self.assertIn("%oldchk=prev.chk", result)
+        self.assertIn("%chk=new.chk", result)
 
     def test_no_chk_line_leaves_content_unchanged(self):
         content = "#P B3LYP/6-31G(d) Opt\n"
