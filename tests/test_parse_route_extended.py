@@ -231,7 +231,7 @@ def _make_dialog():
     dlg.symmetry_combo = _Combo(["Default", "Loose (Symmetry=Loose)", "None (NoSymm)"], 0)
     dlg.grid_combo = _Combo(GRID_OPTIONS, 0)
 
-    dlg.td_enable = _Check(False)
+    dlg.td_method = _Combo(["None", "TD", "TDA"], 0)
     dlg.td_nstates = _Spin(6)
     dlg.td_states_type = _Combo(["Default", "Singlets", "Triplets", "50-50"], 0)
     dlg.td_root = _Spin(0)
@@ -394,10 +394,18 @@ class TestParseRouteProperties(unittest.TestCase):
     def test_td(self):
         dlg = _make_dialog()
         dlg.parse_route("#P B3LYP/6-31G(d) TD=(NStates=10,Triplets,Root=2)")
-        self.assertTrue(dlg.td_enable.isChecked())
+        self.assertEqual(dlg.td_method.currentText(), "TD")
         self.assertEqual(dlg.td_nstates.value(), 10)
         self.assertEqual(dlg.td_states_type.currentText(), "Triplets")
         self.assertEqual(dlg.td_root.value(), 2)
+
+    def test_tda(self):
+        dlg = _make_dialog()
+        dlg.parse_route("#P B3LYP/6-31G(d) TDA=(NStates=8,Singlets,Root=1)")
+        self.assertEqual(dlg.td_method.currentText(), "TDA")
+        self.assertEqual(dlg.td_nstates.value(), 8)
+        self.assertEqual(dlg.td_states_type.currentText(), "Singlets")
+        self.assertEqual(dlg.td_root.value(), 1)
 
     def test_nmr(self):
         dlg = _make_dialog()

@@ -383,9 +383,10 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         self.grid_combo.addItems(GRID_OPTIONS)
         layout.addRow("Integration Grid:", self.grid_combo)
 
-        layout.addRow(QLabel("— TD-DFT —"))
-        self.td_enable = QCheckBox("Enable TD")
-        layout.addRow(self.td_enable)
+        layout.addRow(QLabel("— TD-DFT / TDA —"))
+        self.td_method = QComboBox()
+        self.td_method.addItems(["None", "TD", "TDA"])
+        layout.addRow("Method:", self.td_method)
         self.td_nstates = QSpinBox()
         self.td_nstates.setRange(1, 500)
         self.td_nstates.setValue(6)
@@ -718,7 +719,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             self.density_chk,
             self.symmetry_combo,
             self.grid_combo,
-            self.td_enable,
+            self.td_method,
             self.td_nstates,
             self.td_states_type,
             self.td_root,
@@ -897,7 +898,8 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         if grid != "Default":
             route_parts.append(f"Integral({grid})")
 
-        if self.td_enable.isChecked():
+        td_val = self.td_method.currentText()
+        if td_val != "None":
             td_opts = [f"NStates={self.td_nstates.value()}"]
             states = self.td_states_type.currentText()
             if states == "Singlets":
@@ -908,7 +910,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
                 td_opts.append("50-50")
             if self.td_root.value() > 0:
                 td_opts.append(f"Root={self.td_root.value()}")
-            route_parts.append(f"TD=({', '.join(td_opts)})")
+            route_parts.append(f"{td_val}=({', '.join(td_opts)})")
 
         if self.nmr_chk.isChecked():
             route_parts.append("NMR=GIAO")
@@ -1112,10 +1114,10 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
                 self.grid_combo.setCurrentText(grid)
                 break
 
-        m_td = re.search(r"TD\s*=\s*\(([^)]*)\)", route_upper)
+        m_td = re.search(r"\b(TD|TDA)\s*=\s*\(([^)]*)\)", route_upper)
         if m_td:
-            self.td_enable.setChecked(True)
-            opts = [o.strip() for o in m_td.group(1).split(",")]
+            self.td_method.setCurrentText(m_td.group(1))
+            opts = [o.strip() for o in m_td.group(2).split(",")]
             for o in opts:
                 mn = re.match(r"NSTATES=(\d+)", o)
                 if mn:

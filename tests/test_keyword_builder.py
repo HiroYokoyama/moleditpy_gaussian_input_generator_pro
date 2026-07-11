@@ -239,7 +239,7 @@ def _make_dialog():
     dlg.symmetry_combo = _Combo(["Default", "Loose (Symmetry=Loose)", "None (NoSymm)"], 0)
     dlg.grid_combo = _Combo(GRID_OPTIONS, 0)
 
-    dlg.td_enable = _Check(False)
+    dlg.td_method = _Combo(["None", "TD", "TDA"], 0)
     dlg.td_nstates = _Spin(6)
     dlg.td_states_type = _Combo(["Default", "Singlets", "Triplets", "50-50"], 0)
     dlg.td_root = _Spin(0)
@@ -446,7 +446,7 @@ class TestRouteBuilderProperties(unittest.TestCase):
 
     def test_td_enabled_with_options(self):
         dlg = _make_dialog()
-        dlg.td_enable.setChecked(True)
+        dlg.td_method.setCurrentText("TD")
         dlg.td_nstates.setValue(12)
         dlg.td_states_type.setCurrentText("Triplets")
         dlg.td_root.setValue(2)
@@ -456,6 +456,18 @@ class TestRouteBuilderProperties(unittest.TestCase):
         self.assertIn("NStates=12", route)
         self.assertIn("Triplets", route)
         self.assertIn("Root=2", route)
+
+    def test_tda_enabled_with_options(self):
+        dlg = _make_dialog()
+        dlg.td_method.setCurrentText("TDA")
+        dlg.td_nstates.setValue(5)
+        dlg.td_states_type.setCurrentText("Default")
+        dlg.td_root.setValue(1)
+        dlg.update_preview()
+        route = dlg.get_route()
+        self.assertIn("TDA=(", route)
+        self.assertIn("NStates=5", route)
+        self.assertIn("Root=1", route)
 
     def test_output_wfn(self):
         dlg = _make_dialog()
