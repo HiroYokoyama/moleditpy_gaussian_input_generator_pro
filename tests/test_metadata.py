@@ -127,6 +127,18 @@ class TestPluginMetadata(unittest.TestCase):
         self.assertIsInstance(ver, str)
         self.assertGreater(len(ver), 0)
 
+    def test_plugin_category_and_tags(self):
+        self.assertIsInstance(_init.PLUGIN_CATEGORY, str)
+        self.assertIsInstance(_init.PLUGIN_TAGS, list)
+        self.assertTrue(all(isinstance(t, str) for t in _init.PLUGIN_TAGS))
+        self.assertGreater(len(_init.PLUGIN_TAGS), 0)
+
+    def test_plugin_dependencies(self):
+        self.assertIsInstance(_init.PLUGIN_DEPENDENCIES, list)
+        self.assertTrue(
+            all(isinstance(d, str) for d in _init.PLUGIN_DEPENDENCIES)
+        )
+
 
 class TestDefaultSettings(unittest.TestCase):
     def setUp(self):
