@@ -27,7 +27,7 @@ class GaussianSyntaxHighlighter(QSyntaxHighlighter):
                     r"CCSD\(T\)|HF|Opt|Freq|SP|IRC|Stable|ModRedundant|TS|SCRF|"
                     r"EmpiricalDispersion|Pop|NoSymm|Symmetry|TD|NMR|Polar|"
                     r"Integral|GFInput|SCF|Guess|Output)\b",
-                    QRegularExpression.CaseInsensitiveOption,
+                    QRegularExpression.PatternOption.CaseInsensitiveOption,
                 ),
                 route_format,
             )
@@ -40,7 +40,7 @@ class GaussianSyntaxHighlighter(QSyntaxHighlighter):
         self.rules.append(
             (
                 QRegularExpression(
-                    r"^--Link1--\s*$", QRegularExpression.CaseInsensitiveOption
+                    r"^--Link1--\s*$", QRegularExpression.PatternOption.CaseInsensitiveOption
                 ),
                 link1_format,
             )
@@ -62,7 +62,7 @@ class GaussianSyntaxHighlighter(QSyntaxHighlighter):
             (
                 QRegularExpression(
                     r"^\$NBO\b.*|^\$END\b.*|^\*{4}\s*$",
-                    QRegularExpression.CaseInsensitiveOption,
+                    QRegularExpression.PatternOption.CaseInsensitiveOption,
                 ),
                 marker_format,
             )
