@@ -82,6 +82,7 @@ class GaussianSetupDialogPro(QDialog):
         self.load_persistent_settings()
         self.calc_initial_charge_mult()
         self.ui_ready = True
+        self.update_preview()  # earlier calls no-op'd while ui_ready was False
 
     # ------------------------------------------------------------------
     # UI construction
