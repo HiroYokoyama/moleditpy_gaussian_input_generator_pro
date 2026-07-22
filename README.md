@@ -3,7 +3,7 @@
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21307661.svg)](https://doi.org/10.5281/zenodo.21307661)
 [![Tests](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/actions/workflows/tests.yml/badge.svg)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/actions/workflows/tests.yml)
 [![Downloads](https://img.shields.io/github/downloads/HiroYokoyama/moleditpy_gaussian_input_generator_pro/total)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/releases)
-![Test Coverage](https://img.shields.io/badge/coverage->95%25-green)
+![Test Coverage](https://img.shields.io/badge/coverage->90%25-green)
 
 An advanced **Gaussian 16 Input Generator** plugin for **MoleditPy**, designed to streamline the creation of Gaussian `.gjf`/`.com` calculation input files with a focus on usability, automation, and multi-job (`--Link1--`) workflows.
 
