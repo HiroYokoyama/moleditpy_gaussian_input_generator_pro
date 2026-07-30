@@ -47,6 +47,17 @@ _AUTO_SUFFIX_RULES = [
 ]
 
 
+# Degrees from 0/180 within which a Z-matrix reference angle is treated as
+# collinear. Below that the three atoms defining the dihedral's plane are on a
+# line, so the dihedral carries no information.
+_ZM_LINEAR_TOL_DEG = 8.0
+
+
+def _zm_well_conditioned(angle_deg: float) -> bool:
+    """True when *angle_deg* defines a usable Z-matrix reference plane."""
+    return _ZM_LINEAR_TOL_DEG < angle_deg < 180.0 - _ZM_LINEAR_TOL_DEG
+
+
 class GaussianSetupDialogPro(QDialog):
     """
     Gaussian Input Generator Pro
@@ -262,7 +273,9 @@ class GaussianSetupDialogPro(QDialog):
 
         link1_route_group = QGroupBox("Route Section (#)")
         link1_route_layout = QVBoxLayout()
-        self.link1_route_edit = QTextEdit("#P B3LYP/6-31G(d) Freq Geom=Check Guess=Read")
+        self.link1_route_edit = QTextEdit(
+            "#P B3LYP/6-31G(d) Freq Geom=Check Guess=Read"
+        )
         self.link1_route_edit.setFixedHeight(60)
         self.link1_route_edit.textChanged.connect(self.update_preview)
         self.link1_highlighter = GaussianSyntaxHighlighter(
@@ -442,12 +455,38 @@ class GaussianSetupDialogPro(QDialog):
                 candidates = defined[:]
 
             refs = [candidates[-1] if candidates else 0]
+
+            # A reference collinear with i-ref1 leaves the dihedral below
+            # undefined, so prefer a bent one when one exists.
             candidates_2 = [x for x in defined if x != refs[0]]
             if candidates_2:
-                refs.append(candidates_2[-1])
+                pick = candidates_2[-1]
+                if not _zm_well_conditioned(
+                    rdMolTransforms.GetAngleDeg(conf, i, refs[0], pick)
+                ):
+                    for cand in reversed(candidates_2):
+                        if _zm_well_conditioned(
+                            rdMolTransforms.GetAngleDeg(conf, i, refs[0], cand)
+                        ):
+                            pick = cand
+                            break
+                refs.append(pick)
+
+            # The reference plane also degenerates when ref3 is collinear
+            # with ref1-ref2.
             candidates_3 = [x for x in defined if x not in refs]
             if candidates_3:
-                refs.append(candidates_3[-1])
+                pick = candidates_3[-1]
+                if not _zm_well_conditioned(
+                    rdMolTransforms.GetAngleDeg(conf, refs[0], refs[1], pick)
+                ):
+                    for cand in reversed(candidates_3):
+                        if _zm_well_conditioned(
+                            rdMolTransforms.GetAngleDeg(conf, refs[0], refs[1], cand)
+                        ):
+                            pick = cand
+                            break
+                refs.append(pick)
 
             row = {"symbol": symbol, "refs": [], "values": []}
             if len(refs) >= 1:
@@ -753,9 +792,7 @@ class GaussianSetupDialogPro(QDialog):
     def _load_builder_constraints(self):
         """Sync tail ModRedundant lines into the builder's constraint table."""
         try:
-            _, modred = self._split_tail_modredundant(
-                self.tail_edit.toPlainText()
-            )
+            _, modred = self._split_tail_modredundant(self.tail_edit.toPlainText())
             self.builder_dialog.load_modredundant_lines(modred)
         except Exception as _e:
             logging.warning("_load_builder_constraints: %s", _e)
