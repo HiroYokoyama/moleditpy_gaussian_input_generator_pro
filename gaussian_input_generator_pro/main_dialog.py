@@ -27,6 +27,7 @@ from PyQt6.QtCore import Qt
 from rdkit import Chem
 from rdkit.Chem import rdMolTransforms
 
+from . import cluster_link
 from .highlighter import GaussianSyntaxHighlighter
 from .keyword_builder import GaussianRouteBuilderDialog, parse_modredundant_line
 from .constants import TAIL_TEMPLATES
@@ -361,7 +362,21 @@ class GaussianSetupDialogPro(QDialog):
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
         )
 
+        self.submit_btn = QPushButton("Submit to Cluster...")
+        self.submit_btn.clicked.connect(self.submit_to_cluster)
+        self.submit_btn.setStyleSheet("padding: 8px; font-size: 14px;")
+        self.submit_btn.setSizePolicy(
+            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
+        )
+        self.submit_btn.setToolTip(
+            "Save the input and hand it to the Job Manager plugin, which uploads "
+            "and submits it to a remote cluster."
+        )
+        # Only meaningful with Job Manager installed; otherwise it is not shown.
+        self.submit_btn.setVisible(cluster_link.is_available(self.parent()))
+
         btn_layout.addWidget(self.btn_close)
+        btn_layout.addWidget(self.submit_btn)
         btn_layout.addWidget(self.save_btn)
 
         main_layout.addLayout(btn_layout)
@@ -375,6 +390,23 @@ class GaussianSetupDialogPro(QDialog):
 
     def _update_link1_ui(self):
         self.link1_container.setVisible(self.link1_enable.isChecked())
+
+    def submit_to_cluster(self):
+        """Hand the saved input to Job Manager. Saves first when needed."""
+        if self.current_inp_file is None or self._is_modified():
+            self.save_file()
+        if not self.current_inp_file or not os.path.isfile(self.current_inp_file):
+            return  # the user cancelled the save dialog
+        name = os.path.splitext(os.path.basename(self.current_inp_file))[0]
+        if not cluster_link.submit_to_cluster(
+            self.parent(), self.current_inp_file, name=name
+        ):
+            QMessageBox.warning(
+                self,
+                PLUGIN_NAME,
+                "Job Manager could not accept the file. Check that the plugin is "
+                "installed and enabled.",
+            )
 
     def insert_tail_template(self):
         name = self.tail_template_combo.currentText()
