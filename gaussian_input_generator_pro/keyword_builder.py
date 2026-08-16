@@ -997,7 +997,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         if guess != "Default":
             route_parts.append(f"Guess={guess}")
 
-        for keyword in self._search_extra_keywords:
+        for keyword in getattr(self, "_search_extra_keywords", []):
             if keyword and not any(keyword.casefold() == part.casefold() for part in route_parts):
                 route_parts.append(keyword)
         self.preview_str = " ".join(route_parts)
