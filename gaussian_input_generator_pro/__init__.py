@@ -3,8 +3,10 @@ import os
 from PyQt6.QtWidgets import QMessageBox
 
 PLUGIN_NAME = "Gaussian Input Generator Pro"
-PLUGIN_VERSION = "1.2.0"
+PLUGIN_VERSION = "1.3.0"
 PLUGIN_AUTHOR = "HiroYokoyama"
+
+
 PLUGIN_DESCRIPTION = "Advanced Gaussian Input Generator with Preview and Presets."
 PLUGIN_CATEGORY = "Export"
 PLUGIN_TAGS = ["input generator", "export"]

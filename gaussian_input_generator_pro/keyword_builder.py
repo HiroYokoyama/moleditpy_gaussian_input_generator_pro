@@ -44,6 +44,7 @@ from .constants import (
     POP_OPTIONS,
     GRID_OPTIONS,
     SCF_GUESS_OPTIONS,
+    GAUSSIAN_SEARCH_CATALOG,
 )
 
 
@@ -162,9 +163,14 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         self.tab_constraints = QWidget()
         self.setup_constraints_tab()
         self.tabs.addTab(self.tab_constraints, "Constraints/Scan")
+
+        self.tab_search = QWidget()
+        self.setup_search_tab()
+        self.tabs.addTab(self.tab_search, "Search")
         self.tabs.currentChanged.connect(self.on_tab_changed)
 
         layout.addWidget(self.tabs)
+
 
         preview_group = QGroupBox("Route Preview")
         preview_layout = QVBoxLayout()
@@ -837,9 +843,9 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             route_parts.append(mb)
 
         # Job type
-        job_idx = self.job_type.currentIndex()
         job_txt = self.job_type.currentText()
         opt_opts = []
+
         if self.opt_tight.isChecked():
             opt_opts.append("Tight")
         if self.opt_verytight.isChecked():
@@ -1208,3 +1214,191 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
                 if opt.upper() == val:
                     self.scf_guess.setCurrentText(opt)
                     break
+
+    def setup_search_tab(self):
+        layout = QVBoxLayout()
+
+        filter_row = QHBoxLayout()
+        self.search_filter_input = QLineEdit()
+        self.search_filter_input.setPlaceholderText(
+            "Type to search keywords, methods, basis sets, solvation, dispersion..."
+        )
+        self.search_filter_input.setClearButtonEnabled(True)
+        self.search_filter_input.textChanged.connect(self._filter_search_table)
+
+        self.search_category_combo = QComboBox()
+        self.search_category_combo.addItems(
+            [
+                "All Categories",
+                "Job Types",
+                "Methods / Functionals",
+                "Basis Sets",
+                "Solvation (SCRF)",
+                "Dispersion",
+                "Convergence & SCF",
+                "Population & Output",
+                "Properties & Advanced",
+            ]
+        )
+        self.search_category_combo.currentIndexChanged.connect(self._filter_search_table)
+
+        filter_row.addWidget(QLabel("Search:"))
+        filter_row.addWidget(self.search_filter_input, 1)
+        filter_row.addWidget(QLabel("Category:"))
+        filter_row.addWidget(self.search_category_combo)
+        layout.addLayout(filter_row)
+
+        self.search_table = QTableWidget(0, 4)
+        self.search_table.setHorizontalHeaderLabels(
+            ["Category", "Keyword", "Description", "Action"]
+        )
+        self.search_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.search_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.search_table.horizontalHeader().setStretchLastSection(False)
+        self.search_table.cellDoubleClicked.connect(self._on_search_row_double_clicked)
+
+        layout.addWidget(self.search_table)
+        self.tab_search.setLayout(layout)
+        self._populate_search_database()
+
+
+    def _populate_search_database(self):
+        catalog = list(GAUSSIAN_SEARCH_CATALOG)
+        existing_keywords = {item[1] for item in catalog}
+        for m in ALL_GAUSSIAN_METHODS:
+            if m not in existing_keywords:
+                catalog.append(("Methods / Functionals", m, f"Gaussian method {m}"))
+                existing_keywords.add(m)
+        for b in ALL_GAUSSIAN_BASIS_SETS:
+            if b not in existing_keywords:
+                catalog.append(("Basis Sets", b, f"Gaussian basis set {b}"))
+                existing_keywords.add(b)
+
+        self._search_catalog = catalog
+        self._filter_search_table()
+
+
+    def _filter_search_table(self):
+        query = (self.search_filter_input.text() or "").strip().lower()
+        selected_cat = self.search_category_combo.currentText()
+
+        filtered = []
+        for cat, kw, desc in self._search_catalog:
+            if selected_cat != "All Categories" and selected_cat != cat:
+                continue
+            if query and query not in kw.lower() and query not in desc.lower() and query not in cat.lower():
+                continue
+            filtered.append((cat, kw, desc))
+
+        self.search_table.setRowCount(len(filtered))
+        for row, (cat, kw, desc) in enumerate(filtered):
+            item_cat = QTableWidgetItem(cat)
+            item_kw = QTableWidgetItem(kw)
+            item_desc = QTableWidgetItem(desc)
+
+
+            btn_apply = QPushButton("Apply")
+            btn_apply.setMaximumWidth(70)
+            btn_apply.clicked.connect(lambda _, k=kw, c=cat, b=btn_apply: self._apply_search_item(k, c, b))
+
+            self.search_table.setItem(row, 0, item_cat)
+            self.search_table.setItem(row, 1, item_kw)
+            self.search_table.setItem(row, 2, item_desc)
+            self.search_table.setCellWidget(row, 3, btn_apply)
+
+        self.search_table.resizeColumnsToContents()
+        self.search_table.horizontalHeader().setStretchLastSection(False)
+        self.search_table.horizontalHeader().setSectionResizeMode(
+            2, self.search_table.horizontalHeader().ResizeMode.Stretch
+        )
+
+    def _on_search_row_double_clicked(self, row, column):
+        item_kw = self.search_table.item(row, 1)
+        item_cat = self.search_table.item(row, 0)
+        btn = self.search_table.cellWidget(row, 3)
+        if item_kw and item_cat:
+            self._apply_search_item(item_kw.text(), item_cat.text(), btn)
+
+    def _apply_search_item(self, keyword, category, btn=None):
+        """Apply the selected keyword directly into the Gaussian route and controls."""
+        if category == "Job Types":
+            for i in range(self.job_type.count()):
+                if keyword.lower() in self.job_type.itemText(i).lower():
+                    self.job_type.setCurrentIndex(i)
+                    self.update_preview()
+                    break
+        elif category == "Methods / Functionals":
+            if hasattr(self, "method_name"):
+                self.method_name.setCurrentText(keyword)
+                if hasattr(self.method_name, "isEditable") and self.method_name.isEditable():
+                    self.method_name.setEditText(keyword)
+            self.update_preview()
+        elif category == "Basis Sets":
+            if hasattr(self, "basis_set"):
+                self.basis_set.setCurrentText(keyword)
+                if hasattr(self.basis_set, "isEditable") and self.basis_set.isEditable():
+                    self.basis_set.setEditText(keyword)
+            self.update_preview()
+        elif category == "Dispersion":
+            for i in range(self.dispersion.count()):
+                if keyword.lower() in self.dispersion.itemText(i).lower():
+                    self.dispersion.setCurrentIndex(i)
+                    break
+            self.update_preview()
+        elif category == "Solvation (SCRF)":
+            if "SMD" in keyword.upper():
+                self.solv_model.setCurrentText("SMD")
+            elif "PCM" in keyword.upper() or "IEFPCM" in keyword.upper():
+                self.solv_model.setCurrentText("IEFPCM")
+            m = re.search(r"Solvent\s*=\s*(\w+)", keyword, re.IGNORECASE)
+            if m and hasattr(self, "solvent"):
+                solv_name = m.group(1)
+                for i in range(self.solvent.count()):
+                    if solv_name.lower() == self.solvent.itemText(i).lower():
+                        self.solvent.setCurrentIndex(i)
+                        break
+            self.update_preview()
+        elif category == "Convergence & SCF":
+            if "XQC" in keyword.upper():
+                self.scf_xqc.setChecked(True)
+            if "TIGHT" in keyword.upper():
+                self.scf_tight.setChecked(True)
+            if "GRID=" in keyword.upper():
+                for opt in GRID_OPTIONS:
+                    if opt.lower() in keyword.lower():
+                        self.grid_combo.setCurrentText(opt)
+            self.update_preview()
+        elif category == "Population & Output":
+            if "NBO" in keyword.upper():
+                for opt in POP_OPTIONS:
+                    if "NBO" in opt.upper():
+                        self.pop_combo.setCurrentText(opt)
+                        break
+            if "GFINPUT" in keyword.upper():
+                self.gfinput_chk.setChecked(True)
+            if "WFN" in keyword.upper():
+                self.output_combo.setCurrentText("WFN")
+            elif "WFX" in keyword.upper():
+                self.output_combo.setCurrentText("WFX")
+            self.update_preview()
+        elif category == "Properties & Advanced":
+            if "NMR" in keyword.upper():
+                self.nmr_chk.setChecked(True)
+            if "POLAR" in keyword.upper():
+                self.polar_chk.setChecked(True)
+            if "TD" in keyword.upper():
+                self.td_chk.setChecked(True)
+            self.update_preview()
+        else:
+            if hasattr(self, "extra_keywords"):
+                current = self.extra_keywords.text().strip()
+                if keyword not in current.split():
+                    new_text = f"{current} {keyword}".strip()
+                    self.extra_keywords.setText(new_text)
+            self.update_preview()
+
+        if btn is not None and hasattr(btn, "setText"):
+            btn.setText("Applied!")
+            QtCore.QTimer.singleShot(1000, lambda: btn.setText("Apply") if btn else None)
+
+

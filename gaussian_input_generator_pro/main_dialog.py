@@ -407,6 +407,9 @@ class GaussianSetupDialogPro(QDialog):
                 "Job Manager could not accept the file. Check that the plugin is "
                 "installed and enabled.",
             )
+        else:
+            self.accept()
+
 
     def insert_tail_template(self):
         name = self.tail_template_combo.currentText()

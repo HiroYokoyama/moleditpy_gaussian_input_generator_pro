@@ -392,7 +392,9 @@ class TestSetupUiStructural(unittest.TestCase):
         dlg.tab_tddft = MagicMock()
         dlg.tab_constraints = MagicMock()
         dlg.tab_props = MagicMock()
+        dlg.tab_search = MagicMock()
         dlg.tabs = MagicMock()
+        dlg._search_catalog = []
         dlg.update_ui_state = MagicMock()
         dlg.update_preview = MagicMock()
         dlg.update_method_list = MagicMock()
@@ -406,7 +408,13 @@ class TestSetupUiStructural(unittest.TestCase):
             lambda: GaussianRouteBuilderDialog.setup_constraints_tab(dlg)
         )
         dlg.setup_props_tab = lambda: GaussianRouteBuilderDialog.setup_props_tab(dlg)
+        dlg.setup_search_tab = lambda: GaussianRouteBuilderDialog.setup_search_tab(dlg)
+        dlg._populate_search_database = lambda: GaussianRouteBuilderDialog._populate_search_database(dlg)
+        dlg._filter_search_table = lambda: GaussianRouteBuilderDialog._filter_search_table(dlg)
+        dlg._apply_search_item = lambda kw, cat, btn=None: GaussianRouteBuilderDialog._apply_search_item(dlg, kw, cat, btn)
+        dlg._on_search_row_double_clicked = lambda r, c: GaussianRouteBuilderDialog._on_search_row_double_clicked(dlg, r, c)
         dlg.connect_signals = lambda: GaussianRouteBuilderDialog.connect_signals(dlg)
+
         dlg.add_constraint = MagicMock()
         dlg.remove_constraint = MagicMock()
         dlg.clear_all_constraints = MagicMock()
@@ -491,9 +499,11 @@ class TestSetupUiStructural(unittest.TestCase):
                 "tab_tddft",
                 "tab_constraints",
                 "tab_props",
+                "tab_search",
                 "tabs",
             ]:
                 delattr(dlg, attr)
+
             GaussianRouteBuilderDialog.setup_ui(dlg)
         self.assertTrue(dlg.ui_ready)
         dlg.update_ui_state.assert_called()
