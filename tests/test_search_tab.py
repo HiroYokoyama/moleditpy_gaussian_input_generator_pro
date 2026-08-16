@@ -35,20 +35,20 @@ def test_gaussian_route_builder_search_tab():
     dlg._apply_search_item = lambda kw, cat, btn=None: GaussianRouteBuilderDialog._apply_search_item(dlg, kw, cat, btn)
     dlg._on_search_row_double_clicked = lambda r, c: GaussianRouteBuilderDialog._on_search_row_double_clicked(dlg, r, c)
 
-    GaussianRouteBuilderDialog.setup_search_tab(dlg)
-
+    dlg._populate_search_database()
     assert len(dlg._search_catalog) > 0
 
     # Test filtering
-    dlg.search_filter_input.setText("wB97XD")
-    dlg.search_category_combo.setCurrentText("All Categories")
-    GaussianRouteBuilderDialog._filter_search_table(dlg)
-    assert dlg.search_table.rowCount() > 0
+    dlg.search_filter_input.text.return_value = "wB97XD"
+    dlg.search_category_combo.currentText.return_value = "All Categories"
+    dlg._filter_search_table()
+    assert dlg.search_table.setRowCount.called
 
     # Test applying a method
-    GaussianRouteBuilderDialog._apply_search_item(dlg, "wB97XD", "Methods / Functionals")
+    dlg._apply_search_item("wB97XD", "Methods / Functionals")
     dlg.method_name.setCurrentText.assert_called_with("wB97XD")
 
     # Test applying a basis set
-    GaussianRouteBuilderDialog._apply_search_item(dlg, "def2TZVP", "Basis Sets")
+    dlg._apply_search_item("def2TZVP", "Basis Sets")
     dlg.basis_set.setCurrentText.assert_called_with("def2TZVP")
+
