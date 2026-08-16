@@ -29,6 +29,7 @@ def test_gaussian_route_builder_search_tab():
         search_table=MagicMock(),
         font=MagicMock(),
         update_preview=MagicMock(),
+        _filter_search_table=MagicMock(),
     )
     dlg._populate_search_database = lambda: GaussianRouteBuilderDialog._populate_search_database(dlg)
     dlg._apply_search_item = lambda kw, cat, btn=None: GaussianRouteBuilderDialog._apply_search_item(dlg, kw, cat, btn)
