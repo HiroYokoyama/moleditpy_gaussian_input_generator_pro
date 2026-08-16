@@ -6,6 +6,10 @@ import os
 import types
 from unittest.mock import MagicMock, patch
 
+import pytest
+
+pytest.importorskip("PyQt6")
+
 from gaussian_input_generator_pro.main_dialog import GaussianSetupDialogPro
 
 

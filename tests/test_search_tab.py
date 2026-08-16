@@ -5,6 +5,10 @@ from __future__ import annotations
 import types
 from unittest.mock import MagicMock
 
+import pytest
+
+pytest.importorskip("PyQt6")
+
 from gaussian_input_generator_pro.keyword_builder import GaussianRouteBuilderDialog
 
 
