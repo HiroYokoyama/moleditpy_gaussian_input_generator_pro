@@ -46,3 +46,23 @@ def test_gaussian_route_builder_search_tab():
     dlg.basis_set.setCurrentText.assert_called_with("def2TZVP")
 
 
+
+
+def test_gaussian_search_keeps_unmapped_keyword():
+    dlg = types.SimpleNamespace(_search_extra_keywords=[], update_preview=MagicMock())
+    dlg._add_search_keyword = lambda keyword: GaussianRouteBuilderDialog._add_search_keyword(dlg, keyword)
+    dlg._apply_search_item = lambda keyword, category, btn=None: GaussianRouteBuilderDialog._apply_search_item(dlg, keyword, category, btn)
+
+    dlg._apply_search_item("SCF=QC", "Convergence & SCF")
+
+    assert dlg._search_extra_keywords == ["SCF=QC"]
+
+
+def test_gaussian_search_uses_exact_opt_task():
+    dlg = types.SimpleNamespace(job_type=MagicMock(), _search_extra_keywords=[], update_preview=MagicMock())
+    dlg._add_search_keyword = lambda keyword: GaussianRouteBuilderDialog._add_search_keyword(dlg, keyword)
+    dlg._apply_search_item = lambda keyword, category, btn=None: GaussianRouteBuilderDialog._apply_search_item(dlg, keyword, category, btn)
+
+    dlg._apply_search_item("Opt", "Job Types")
+
+    dlg.job_type.setCurrentText.assert_called_once_with("Optimization Only (Opt)")

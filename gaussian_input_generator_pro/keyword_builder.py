@@ -114,6 +114,13 @@ def _split_route_tokens(route):
     return tokens
 
 
+def _restore_apply_button(button):
+    try:
+        button.setText("Apply")
+    except RuntimeError:
+        pass
+
+
 class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
     """Dialog to construct the Gaussian route (#) line."""
 
@@ -128,6 +135,9 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         self.mol = mol
         self.main_window = main_window
         self.selected_atoms = []
+        # Search results that do not have a dedicated control are retained in
+        # the generated route instead of being acknowledged and discarded.
+        self._search_extra_keywords = []
         self.setup_ui()
         self.parse_route(current_route)
 
@@ -987,6 +997,9 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         if guess != "Default":
             route_parts.append(f"Guess={guess}")
 
+        for keyword in self._search_extra_keywords:
+            if keyword and not any(keyword.casefold() == part.casefold() for part in route_parts):
+                route_parts.append(keyword)
         self.preview_str = " ".join(route_parts)
         self.preview_label.setText(self.preview_str)
 
@@ -1319,94 +1332,81 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         if item_kw and item_cat:
             self._apply_search_item(item_kw.text(), item_cat.text(), btn)
 
-    def _apply_search_item(self, keyword, category, btn=None):
-        """Apply the selected keyword directly into the Gaussian route and controls."""
-        if category == "Job Types":
-            for i in range(self.job_type.count()):
-                if keyword.lower() in self.job_type.itemText(i).lower():
-                    self.job_type.setCurrentIndex(i)
-                    self.update_preview()
-                    break
-        elif category == "Methods / Functionals":
-            if hasattr(self, "method_name"):
-                self.method_name.setCurrentText(keyword)
-                if hasattr(self.method_name, "isEditable") and self.method_name.isEditable():
-                    self.method_name.setEditText(keyword)
-            self.update_preview()
-        elif category == "Basis Sets":
-            if hasattr(self, "basis_set"):
-                self.basis_set.setCurrentText(keyword)
-                if hasattr(self.basis_set, "isEditable") and self.basis_set.isEditable():
-                    self.basis_set.setEditText(keyword)
-            self.update_preview()
-        elif category == "Dispersion":
-            for i in range(self.dispersion.count()):
-                if keyword.lower() in self.dispersion.itemText(i).lower():
-                    self.dispersion.setCurrentIndex(i)
-                    break
-            self.update_preview()
-        elif category == "Solvation (SCRF)":
-            if "SMD" in keyword.upper():
-                self.solv_model.setCurrentText("SMD")
-            elif "PCM" in keyword.upper() or "IEFPCM" in keyword.upper():
-                self.solv_model.setCurrentText("IEFPCM")
-            m = re.search(r"Solvent\s*=\s*(\w+)", keyword, re.IGNORECASE)
-            if m and hasattr(self, "solvent"):
-                solv_name = m.group(1)
-                for i in range(self.solvent.count()):
-                    if solv_name.lower() == self.solvent.itemText(i).lower():
-                        self.solvent.setCurrentIndex(i)
-                        break
-            self.update_preview()
-        elif category == "Convergence & SCF":
-            if "XQC" in keyword.upper():
-                self.scf_xqc.setChecked(True)
-            if "TIGHT" in keyword.upper():
-                self.scf_tight.setChecked(True)
-            if "GRID=" in keyword.upper():
-                for opt in GRID_OPTIONS:
-                    if opt.lower() in keyword.lower():
-                        self.grid_combo.setCurrentText(opt)
-            self.update_preview()
-        elif category == "Population & Output":
-            if "NBO" in keyword.upper():
-                for opt in POP_OPTIONS:
-                    if "NBO" in opt.upper():
-                        self.pop_combo.setCurrentText(opt)
-                        break
-            if "GFINPUT" in keyword.upper():
-                self.gfinput_chk.setChecked(True)
-            if "WFN" in keyword.upper():
-                self.output_combo.setCurrentText("WFN")
-            elif "WFX" in keyword.upper():
-                self.output_combo.setCurrentText("WFX")
-            self.update_preview()
-        elif category == "Properties & Advanced":
-            if "NMR" in keyword.upper():
-                self.nmr_chk.setChecked(True)
-            if "POLAR" in keyword.upper():
-                self.polar_chk.setChecked(True)
-            if "TD" in keyword.upper():
-                self.td_chk.setChecked(True)
-            self.update_preview()
-        else:
-            if hasattr(self, "extra_keywords"):
-                current = self.extra_keywords.text().strip()
-                if keyword not in current.split():
-                    new_text = f"{current} {keyword}".strip()
-                    self.extra_keywords.setText(new_text)
-            self.update_preview()
+    def _add_search_keyword(self, keyword):
+        """Keep a catalog keyword that has no lossless widget mapping."""
+        if not keyword:
+            return
+        if not hasattr(self, "_search_extra_keywords"):
+            self._search_extra_keywords = []
+        if keyword.casefold() not in {item.casefold() for item in self._search_extra_keywords}:
+            self._search_extra_keywords.append(keyword)
 
+    def _apply_search_item(self, keyword, category, btn=None):
+        """Apply a search result without silently dropping unsupported terms."""
+        applied_to_control = False
+        job_types = {
+            "opt": "Optimization Only (Opt)",
+            "freq": "Frequency Only (Freq)",
+            "opt freq": "Optimization + Freq (Opt Freq)",
+            "sp": "Single Point Energy (SP)",
+            "scan": "Scan (ModRedundant)",
+            "irc": "IRC",
+        }
+        if category == "Job Types" and keyword.casefold() in job_types:
+            self.job_type.setCurrentText(job_types[keyword.casefold()])
+            applied_to_control = True
+        elif category == "Methods / Functionals":
+            self.method_name.setCurrentText(keyword)
+            if self.method_name.isEditable():
+                self.method_name.setEditText(keyword)
+            applied_to_control = True
+        elif category == "Basis Sets":
+            self.basis_set.setCurrentText(keyword)
+            if self.basis_set.isEditable():
+                self.basis_set.setEditText(keyword)
+            applied_to_control = True
+        elif category == "Dispersion":
+            value = keyword.split("=", 1)[-1]
+            if self.dispersion.findText(value) >= 0:
+                self.dispersion.setCurrentText(value)
+                applied_to_control = True
+        elif category == "Convergence & SCF":
+            if keyword == "SCF=XQC":
+                self.scf_xqc.setChecked(True)
+                applied_to_control = True
+            elif keyword == "SCF=Tight":
+                self.scf_tight.setChecked(True)
+                applied_to_control = True
+            elif keyword.startswith("Integral(Grid="):
+                value = keyword.removeprefix("Integral(Grid=").removesuffix(")")
+                if self.grid_combo.findText(value) >= 0:
+                    self.grid_combo.setCurrentText(value)
+                    applied_to_control = True
+        elif category == "Population & Output":
+            if keyword == "GFInput":
+                self.gfinput_chk.setChecked(True)
+                applied_to_control = True
+            elif keyword == "Density=Current":
+                self.density_chk.setChecked(True)
+                applied_to_control = True
+            elif keyword in {"Output=WFN", "Output=WFX"}:
+                self.output_combo.setCurrentText(keyword.split("=", 1)[1])
+                applied_to_control = True
+            elif keyword == "Pop=NBO":
+                self.pop_combo.setCurrentText("NBO")
+                applied_to_control = True
+        elif category == "Properties & Advanced":
+            if keyword == "NMR=GIAO":
+                self.nmr_chk.setChecked(True)
+                applied_to_control = True
+            elif keyword == "Polar":
+                self.polar_chk.setChecked(True)
+                applied_to_control = True
+
+        if not applied_to_control:
+            self._add_search_keyword(keyword)
+        self.update_preview()
         if btn is not None and hasattr(btn, "setText"):
             btn.setText("Applied!")
-
-            def _reset_btn():
-                try:
-                    if btn:
-                        btn.setText("Apply")
-                except RuntimeError:
-                    pass
-
-            QtCore.QTimer.singleShot(1000, _reset_btn)
-
+            QtCore.QTimer.singleShot(1000, lambda: _restore_apply_button(btn))
 
