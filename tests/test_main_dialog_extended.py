@@ -483,6 +483,64 @@ class TestGenerateInputContent(_RealDialogTestCase):
 
 
 # ---------------------------------------------------------------------------
+# Job Manager relay tag
+# ---------------------------------------------------------------------------
+
+
+class TestRelayTag(_RealDialogTestCase):
+    def test_settings_hidden_until_the_checkbox_is_ticked(self):
+        dlg = self._make_dialog(mol=_make_water())
+        self.assertFalse(dlg.relay_tag_settings_widget.isVisibleTo(dlg))
+        dlg.relay_tag_cb.setChecked(True)
+        self.assertTrue(dlg.relay_tag_settings_widget.isVisibleTo(dlg))
+        dlg.relay_tag_cb.setChecked(False)
+        self.assertFalse(dlg.relay_tag_settings_widget.isVisibleTo(dlg))
+
+    def test_checking_it_fills_oldchk_with_the_tag(self):
+        dlg = self._make_dialog(mol=_make_water())
+        dlg.oldchk_edit.setText("prev.chk")
+        dlg.relay_tag_cb.setChecked(True)
+        self.assertEqual(dlg.oldchk_edit.text(), "[prevfile:.chk]")
+        self.assertTrue(dlg.oldchk_edit.isReadOnly())
+
+    def test_unchecking_it_restores_the_previous_value(self):
+        dlg = self._make_dialog(mol=_make_water())
+        dlg.oldchk_edit.setText("prev.chk")
+        dlg.relay_tag_cb.setChecked(True)
+        dlg.relay_tag_cb.setChecked(False)
+        self.assertEqual(dlg.oldchk_edit.text(), "prev.chk")
+        self.assertFalse(dlg.oldchk_edit.isReadOnly())
+
+    def test_editing_the_tag_while_checked_updates_oldchk(self):
+        dlg = self._make_dialog(mol=_make_water())
+        dlg.relay_tag_cb.setChecked(True)
+        dlg.relay_tag_edit.setText("[prevfile:.fchk]")
+        self.assertEqual(dlg.oldchk_edit.text(), "[prevfile:.fchk]")
+
+    def test_the_tag_reaches_the_generated_input(self):
+        dlg = self._make_dialog(mol=_make_water())
+        dlg.relay_tag_cb.setChecked(True)
+        content = dlg.generate_input_content()
+        self.assertIn("%oldchk=[prevfile:.chk]", content)
+
+    def test_save_as_default_persists_across_a_new_dialog(self):
+        dlg = self._make_dialog(mol=_make_water())
+        dlg.relay_tag_edit.setText("[prevfile:.fchk]")
+        dlg.relay_tag_save_btn.click()
+
+        dlg2 = self._make_dialog(mol=_make_water())
+        self.assertEqual(dlg2.relay_tag_edit.text(), "[prevfile:.fchk]")
+
+    def test_a_blank_save_falls_back_to_the_default_tag(self):
+        dlg = self._make_dialog(mol=_make_water())
+        dlg.relay_tag_edit.setText("   ")
+        dlg.relay_tag_save_btn.click()
+
+        dlg2 = self._make_dialog(mol=_make_water())
+        self.assertEqual(dlg2.relay_tag_edit.text(), "[prevfile:.chk]")
+
+
+# ---------------------------------------------------------------------------
 # save_file
 # ---------------------------------------------------------------------------
 

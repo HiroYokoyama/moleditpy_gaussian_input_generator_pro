@@ -1382,6 +1382,17 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
                 if self.grid_combo.findText(value) >= 0:
                     self.grid_combo.setCurrentText(value)
                     applied_to_control = True
+            elif keyword in {"Guess=Read", "Guess=Mix"}:
+                # HCore/Alter have no combo entry (SCF_GUESS_OPTIONS is only
+                # Default/Mix/Read) and fall through to the raw-text fallback
+                # below on purpose.
+                value = keyword.split("=", 1)[1]
+                if self.scf_guess.findText(value) >= 0:
+                    self.scf_guess.setCurrentText(value)
+                    applied_to_control = True
+            elif keyword == "NoSymm":
+                self.symmetry_combo.setCurrentText("None (NoSymm)")
+                applied_to_control = True
         elif category == "Population & Output":
             if keyword == "GFInput":
                 self.gfinput_chk.setChecked(True)

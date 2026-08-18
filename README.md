@@ -18,6 +18,7 @@ Repo: [https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro](h
 - **Real-time Preview** — generated route line and full `.gjf` file update instantly as you make changes
 - **Round-trip Parsing** — reopen the Route Builder on an existing route and settings are restored into the UI
 - **Link 0 Automation** — `%nprocshared`, `%mem`, `%chk` (auto-named from the saved filename), optional `%oldchk`
+- **Job Manager Relay Tag** — tick a box to fill `%oldchk` with a configurable tag (`[prevfile:.chk]` by default) instead of a literal filename; the Job Manager plugin resolves it to the real checkpoint from whichever job you pick when this input is submitted. The tag text is editable and can be saved as the default for new documents
 - **Additional Job (`--Link1--`)** — append a second job that reads the checkpoint (`Geom=Check Guess=Read`) or copies the current geometry
 - **Z-Matrix Output** — emit coordinates as Cartesian, Gaussian Z-matrix, or Z-matrix with a `Variables:` section
 - **Interactive Constraints & Scans** — click atoms in the MoleditPy 3D viewer to define ModRedundant freeze/scan lines (distance/angle/dihedral); `Opt=ModRedundant` is added to the route automatically
