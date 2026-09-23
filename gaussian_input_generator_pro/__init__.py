@@ -3,13 +3,13 @@ import os
 from PyQt6.QtWidgets import QMessageBox
 
 PLUGIN_NAME = "Gaussian Input Generator Pro"
-PLUGIN_VERSION = "1.4.2"
+PLUGIN_VERSION = "1.4.3"
 PLUGIN_AUTHOR = "HiroYokoyama"
 
 
 PLUGIN_DESCRIPTION = "Advanced Gaussian Input Generator with Preview and Presets."
 PLUGIN_CATEGORY = "Export"
-PLUGIN_TAGS = ["input generator", "export"]
+PLUGIN_TAGS = ["File", "Generator"]
 PLUGIN_DEPENDENCIES = []  # PyQt6/RDKit come from the host app; psutil is optional
 PLUGIN_SUPPORTED_MOLEDITPY_VERSION = ">=4.0.0, <5.0.0"
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
