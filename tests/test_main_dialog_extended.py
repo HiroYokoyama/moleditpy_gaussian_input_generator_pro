@@ -1098,5 +1098,137 @@ class TestSubmitToClusterButton(_RealDialogTestCase):
         warn.assert_called_once()
 
 
+# ---------------------------------------------------------------------------
+# Input integrity: things that used to change the calculation silently
+# ---------------------------------------------------------------------------
+
+keyword_builder_mod = sys.modules[f"{_PRIV_PKG}.keyword_builder"]
+GaussianRouteBuilderDialog = keyword_builder_mod.GaussianRouteBuilderDialog
+
+
+def _round_trip(route):
+    return GaussianRouteBuilderDialog(None, route).get_route()
+
+
+def _keywords(route):
+    """{KEY: {OPTION, ...}} with option spelling normalised."""
+    return {
+        key: {o.upper() for o in opts}
+        for key, (_tok, _name, opts) in keyword_builder_mod._route_keywords(
+            route
+        ).items()
+    }
+
+
+class TestRouteBuilderRoundTripKeepsEverything(unittest.TestCase):
+    """OK in the builder must never drop or change what the route said."""
+
+    def test_no_keyword_or_option_is_lost(self):
+        for route in (
+            "#P UB3LYP/6-31G(d) Opt Guess=Mix Stable=Opt",
+            "#P B3LYP/Gen Pseudo=Read Opt",
+            "#P B3LYP/6-31G(d) Opt Freq Temperature=373.15 Pressure=2",
+            "#P B3LYP/6-31G(d) Counterpoise=2 Opt",
+            "#P B3LYP/6-31G(d) NMR=GIAO SCF=(XQC,MaxCycle=512)",
+            "#P B3LYP/6-31G(d) NMR=CSGT",
+            "#P B3LYP/6-31G(d) Pop=NBORead Geom=Connectivity",
+            "#P B3LYP/6-31G(d) Opt=(TS,CalcFC,NoEigenTest) Freq",
+            "#P B3LYP/6-31G(d) Opt=(QST2) Freq",
+            "#P B3LYP/6-31G(d) Opt=(CalcFC,MaxCycles=200,ModRedundant) Int=UltraFine",
+            "#P B3LYP/6-31G(d) SCRF=(PCM,Solvent=Acetonitrile,Read)",
+        ):
+            with self.subTest(route=route):
+                before, after = _keywords(route), _keywords(_round_trip(route))
+                for key, opts in before.items():
+                    self.assertIn(key, after)
+                    self.assertLessEqual(opts, after[key])
+
+    def test_ts_search_stays_a_ts_search(self):
+        self.assertIn("TS", _keywords(_round_trip("#P B3LYP/6-31G(d) Opt=TS"))["OPT"])
+
+    def test_route_without_job_keyword_stays_single_point(self):
+        for route in (
+            "#P B3LYP/6-31G(d)",
+            "#P B3LYP/6-31G(d) Pop=NBO",
+            "#P HF/STO-3G Polar",
+        ):
+            with self.subTest(route=route):
+                after = _keywords(_round_trip(route))
+                self.assertNotIn("OPT", after)
+                self.assertNotIn("FREQ", after)
+
+    def test_nstates_is_not_mistaken_for_ts(self):
+        out = _round_trip("#P CAM-B3LYP/6-31G(d) Opt TD=(NStates=10)")
+        self.assertNotIn("TS", _keywords(out).get("OPT", set()))
+
+    def test_reparse_does_not_resurrect_deleted_keywords(self):
+        dlg = GaussianRouteBuilderDialog(None, "#P B3LYP/6-31G(d) NMR=GIAO Opt")
+        dlg.parse_route("#P B3LYP/6-31G(d) Opt")
+        self.assertNotIn("NMR", _keywords(dlg.get_route()))
+
+
+class TestGhostAtomsAndCharge(_RealDialogTestCase):
+    def _h2_with_ghost(self, symbol):
+        mol = Chem.AddHs(Chem.MolFromSmiles("[H][H].[H]"))
+        AllChem.EmbedMolecule(mol, randomSeed=5)
+        mol.GetAtomWithIdx(2).SetProp("custom_symbol", symbol)
+        return mol
+
+    def test_orca_ghost_is_written_in_gaussian_notation(self):
+        dlg = self._make_dialog(mol=self._h2_with_ghost("H:"))
+        symbols = [line.split()[0] for line in dlg.get_coords_lines()]
+        self.assertEqual(symbols[2], "H-Bq")
+
+    def test_ghost_atoms_do_not_flip_parity(self):
+        for symbol in ("H:", "H-Bq", "Bq"):
+            with self.subTest(symbol=symbol):
+                mol = self._h2_with_ghost(symbol)
+                self.assertEqual(main_dialog_mod._electron_count(mol, 0), 2)
+
+    def test_charge_follows_molecule_edited_while_open(self):
+        live = {"mol": _make_water()}
+        dlg = self._make_dialog(mol=live["mol"], get_molecule=lambda: live["mol"])
+        self.assertEqual(dlg.charge_spin.value(), 0)
+        hydroxide = Chem.AddHs(Chem.MolFromSmiles("[OH-]"))
+        AllChem.EmbedMolecule(hydroxide, randomSeed=2)
+        live["mol"] = hydroxide
+        dlg.update_preview()
+        self.assertEqual(dlg.charge_spin.value(), -1)
+        self.assertIn("-1 1", dlg.preview_text.toPlainText().splitlines())
+
+
+class TestLink1GeometryWarning(_RealDialogTestCase):
+    def _dialog(self, route1, route2, source):
+        dlg = self._make_dialog(mol=_make_water())
+        dlg.keywords_edit.setPlainText(route1)
+        dlg.link1_route_edit.setPlainText(route2)
+        dlg.link1_geom_src.setCurrentText(source)
+        dlg.link1_enable.setChecked(True)
+        dlg.update_preview()
+        return dlg
+
+    def test_copied_coordinates_after_opt_warn(self):
+        dlg = self._dialog(
+            "#P B3LYP/6-31G(d) Opt", "#P B3LYP/6-31G(d) Freq", "Copy coordinates"
+        )
+        self.assertIn("starting geometry", dlg.link1_geom_warning.text())
+
+    def test_checkpoint_without_geom_check_warns(self):
+        dlg = self._dialog(
+            "#P B3LYP/6-31G(d) Opt",
+            "#P B3LYP/6-31G(d) Freq",
+            "Checkpoint (Geom=Check Guess=Read)",
+        )
+        self.assertIn("Geom=Check", dlg.link1_geom_warning.text())
+
+    def test_consistent_setup_has_no_warning(self):
+        dlg = self._dialog(
+            "#P B3LYP/6-31G(d) Opt",
+            "#P B3LYP/6-31G(d) Freq Geom=Check Guess=Read",
+            "Checkpoint (Geom=Check Guess=Read)",
+        )
+        self.assertEqual(dlg.link1_geom_warning.text(), "")
+
+
 if __name__ == "__main__":
     unittest.main()

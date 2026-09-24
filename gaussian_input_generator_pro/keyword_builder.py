@@ -114,6 +114,155 @@ def _split_route_tokens(route):
     return tokens
 
 
+# Spellings Gaussian accepts for the same route keyword.
+_ROUTE_KEY_ALIASES = {"INT": "INTEGRAL"}
+
+
+def _split_route_options(inner):
+    """Split the inside of ``Kw=(a, b=c d)`` on commas/whitespace at depth 0."""
+    opts = []
+    buf = ""
+    depth = 0
+    for ch in inner:
+        if ch == "(":
+            depth += 1
+        elif ch == ")":
+            depth = max(0, depth - 1)
+        if depth == 0 and (ch == "," or ch.isspace()):
+            if buf:
+                opts.append(buf)
+            buf = ""
+            continue
+        buf += ch
+    if buf:
+        opts.append(buf)
+    return opts
+
+
+def _parse_route_token(token):
+    """Split one route token into (name, key, options).
+
+    ``Opt=(TS,CalcFC)`` -> ("Opt", "OPT", ["TS", "CalcFC"]); ``Opt=TS`` and
+    ``Integral(UltraFine)`` take the same shape. Returns None for the ``#``
+    print-level token and for the method/basis token, which have no options.
+    """
+    if not token or token.startswith("#"):
+        return None
+    m = re.match(r"^([^=(]+)(.*)$", token, re.S)
+    if not m:
+        return None
+    name, rest = m.group(1), m.group(2).strip()
+    if "/" in name:
+        return None
+    if rest.startswith("="):
+        rest = rest[1:].strip()
+    if rest.startswith("(") and rest.endswith(")"):
+        opts = _split_route_options(rest[1:-1])
+    elif rest:
+        opts = [rest]
+    else:
+        opts = []
+    key = name.upper()
+    return name, _ROUTE_KEY_ALIASES.get(key, key), opts
+
+
+def _route_keywords(route):
+    """{key: (token, name, options)} for every option-bearing route keyword."""
+    found = {}
+    for token in _split_route_tokens(route or ""):
+        parsed = _parse_route_token(token)
+        if parsed is None:
+            continue
+        name, key, opts = parsed
+        if key in found:
+            prev_token, prev_name, prev_opts = found[key]
+            found[key] = (prev_token + " " + token, prev_name, prev_opts + opts)
+        else:
+            found[key] = (token, name, opts)
+    return found
+
+
+def _option_key(opt):
+    return opt.split("=", 1)[0].upper() if "=" in opt else None
+
+
+def _merge_route_options(opts, extras):
+    """Add *extras* to *opts*; an ``x=`` extra replaces the builder's ``x=``."""
+    merged = list(opts)
+    for extra in extras:
+        key = _option_key(extra)
+        if key is not None:
+            same = [i for i, o in enumerate(merged) if _option_key(o) == key]
+            if same:
+                merged[same[0]] = extra
+                continue
+        if extra.upper() not in {o.upper() for o in merged}:
+            merged.append(extra)
+    return merged
+
+
+def _apply_route_residual(dialog, route_parts):
+    """Put back what parse_route read but the controls cannot express."""
+    extras = getattr(dialog, "_route_extra_opts", {}) or {}
+    out = []
+    for part in route_parts:
+        parsed = _parse_route_token(part)
+        if parsed is not None and extras.get(parsed[1]):
+            name, key, opts = parsed
+            merged = _merge_route_options(opts, extras[key])
+            part = f"{name}=({', '.join(merged)})"
+        out.append(part)
+    for token in getattr(dialog, "_route_passthrough", []) or []:
+        if token.casefold() not in {p.casefold() for p in out}:
+            out.append(token)
+    return out
+
+
+def _compute_route_residual(dialog, route):
+    """Record every option of *route* that the rebuilt route lost."""
+    dialog._route_extra_opts = {}
+    dialog._route_passthrough = []
+    original = _route_keywords(route)
+    rebuilt = _route_keywords(dialog.preview_str)
+    for key, (token, _name, opts) in original.items():
+        if key not in rebuilt:
+            dialog._route_passthrough.extend(_split_route_tokens(token))
+            continue
+        kept = {o.upper() for o in rebuilt[key][2]}
+        missing = [o for o in opts if o.upper() not in kept]
+        if missing:
+            dialog._route_extra_opts[key] = missing
+
+
+def _snapshot_controls(dialog):
+    state = {}
+    for name, widget in dialog.__dict__.items():
+        if isinstance(widget, QComboBox):
+            state[name] = widget.currentText()
+        elif isinstance(widget, QCheckBox):
+            state[name] = widget.isChecked()
+        elif isinstance(widget, QSpinBox):
+            state[name] = widget.value()
+        elif isinstance(widget, QLineEdit):
+            state[name] = widget.text()
+    return state
+
+
+def _apply_controls(dialog, state, skip=()):
+    for name, val in state.items():
+        widget = getattr(dialog, name, None)
+        if widget is None or name in skip:
+            continue
+        if isinstance(widget, QComboBox):
+            widget.setCurrentText(val)
+        elif isinstance(widget, QCheckBox):
+            widget.setChecked(val)
+        elif isinstance(widget, QSpinBox):
+            widget.setValue(val)
+        elif isinstance(widget, QLineEdit):
+            widget.setText(val)
+
+
 def _restore_apply_button(button):
     try:
         button.setText("Apply")
@@ -138,7 +287,13 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         # Search results that do not have a dedicated control are retained in
         # the generated route instead of being acknowledged and discarded.
         self._search_extra_keywords = []
+        # What parse_route read but no control can express: options to merge
+        # into a keyword the builder still writes, and whole keywords to
+        # carry through verbatim. Rebuilding a route must never drop them.
+        self._route_extra_opts = {}
+        self._route_passthrough = []
         self.setup_ui()
+        self._default_state = _snapshot_controls(self)
         self.parse_route(current_route)
 
     # ------------------------------------------------------------------
@@ -686,33 +841,13 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
     # ------------------------------------------------------------------
 
     def store_state(self):
-        self._saved_state = {}
-        for name, widget in self.__dict__.items():
-            if isinstance(widget, QComboBox):
-                self._saved_state[name] = widget.currentText()
-            elif isinstance(widget, QCheckBox):
-                self._saved_state[name] = widget.isChecked()
-            elif isinstance(widget, QSpinBox):
-                self._saved_state[name] = widget.value()
-            elif isinstance(widget, QLineEdit):
-                self._saved_state[name] = widget.text()
+        self._saved_state = _snapshot_controls(self)
 
     def restore_state(self):
         if getattr(self, "_saved_state", None) is None:
             return
         self.ui_ready = False
-        for name, val in self._saved_state.items():
-            widget = getattr(self, name, None)
-            if widget is None:
-                continue
-            if isinstance(widget, QComboBox):
-                widget.setCurrentText(val)
-            elif isinstance(widget, QCheckBox):
-                widget.setChecked(val)
-            elif isinstance(widget, QSpinBox):
-                widget.setValue(val)
-            elif isinstance(widget, QLineEdit):
-                widget.setText(val)
+        _apply_controls(self, self._saved_state)
         self.ui_ready = True
         self.update_preview()
 
@@ -997,6 +1132,8 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         if guess != "Default":
             route_parts.append(f"Guess={guess}")
 
+        route_parts = _apply_route_residual(self, route_parts)
+
         for keyword in getattr(self, "_search_extra_keywords", []):
             if keyword and not any(keyword.casefold() == part.casefold() for part in route_parts):
                 route_parts.append(keyword)
@@ -1023,6 +1160,11 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
     # ------------------------------------------------------------------
 
     def parse_route(self, route):
+        # Everything the previous route carried is in *route* now; start clean
+        # so a keyword the user deleted by hand is not resurrected.
+        self._route_extra_opts = {}
+        self._route_passthrough = []
+        self._search_extra_keywords = []
         self.ui_ready = False
         try:
             self._parse_route_impl(route)
@@ -1030,10 +1172,22 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             self.ui_ready = True
         self.update_ui_state()
         self.update_preview()
+        if route and route.strip():
+            _compute_route_residual(self, route)
+            self.update_preview()
 
     def _parse_route_impl(self, route):
         if not route:
             return
+        # Controls start from their defaults: a checkbox left on from the
+        # previous route would otherwise re-add a keyword the user deleted.
+        default_state = getattr(self, "_default_state", None)
+        if default_state:
+            _apply_controls(
+                self,
+                default_state,
+                skip=("search_filter_input", "search_category_combo"),
+            )
         tokens = _split_route_tokens(route)
         upper_tokens = [t.upper() for t in tokens]
 
@@ -1078,14 +1232,16 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
 
         route_upper = route.upper()
 
-        # Job type
-        has_opt = re.search(r"\bOPT\b", route_upper) is not None
-        has_freq = re.search(r"\bFREQ\b", route_upper) is not None
-        is_ts = "OPT=(" in route_upper and "TS" in route_upper
-        is_scan = "MODREDUNDANT" in route_upper
-        is_irc = re.search(r"\bIRC\b", route_upper) is not None
-        is_stable = re.search(r"\bSTABLE\b", route_upper) is not None
-        is_sp = re.search(r"\bSP\b", route_upper) is not None
+        # Job type, from the parsed keywords rather than substrings: "TS"
+        # also occurs inside "NStates", and "Opt=TS" has no parentheses.
+        keywords = _route_keywords(route)
+        opt_opts_upper = [o.upper() for o in keywords.get("OPT", (None, None, []))[2]]
+        has_opt = "OPT" in keywords
+        has_freq = "FREQ" in keywords
+        is_ts = "TS" in opt_opts_upper
+        is_scan = "MODREDUNDANT" in opt_opts_upper and not has_freq
+        is_irc = "IRC" in keywords
+        is_stable = "STABLE" in keywords
 
         if is_ts:
             self.job_type.setCurrentIndex(4)
@@ -1101,13 +1257,14 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             self.job_type.setCurrentIndex(1)
         elif has_freq:
             self.job_type.setCurrentIndex(2)
-        elif is_sp:
+        else:
+            # No job keyword means a single point. Leaving the default
+            # (Opt Freq) would turn an NMR or Pop run into an optimization.
             self.job_type.setCurrentIndex(3)
 
         # Opt options
-        m_opt = re.search(r"OPT\s*=\s*\(([^)]*)\)", route_upper)
-        if m_opt:
-            opts = [o.strip() for o in m_opt.group(1).split(",")]
+        if opt_opts_upper:
+            opts = opt_opts_upper
             self.opt_tight.setChecked("TIGHT" in opts)
             self.opt_verytight.setChecked("VERYTIGHT" in opts)
             self.opt_calcfc.setChecked("CALCFC" in opts)
@@ -1175,8 +1332,14 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         elif "SYMMETRY=LOOSE" in route_upper:
             self.symmetry_combo.setCurrentIndex(1)
 
+        # Int=UltraFine, Integral(UltraFine) and Int=(Grid=UltraFine) all name
+        # the same grid.
+        int_opts = [
+            o.upper().split("=", 1)[-1]
+            for o in keywords.get("INTEGRAL", (None, None, []))[2]
+        ]
         for grid in GRID_OPTIONS:
-            if grid != "Default" and f"INTEGRAL({grid.upper()})" in route_upper:
+            if grid != "Default" and grid.upper() in int_opts:
                 self.grid_combo.setCurrentText(grid)
                 break
 
@@ -1198,7 +1361,10 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             elif "50-50" in opts:
                 self.td_states_type.setCurrentText("50-50")
 
-        if "NMR=GIAO" in route_upper or re.search(r"\bNMR\b", route_upper):
+        # The checkbox writes NMR=GIAO, so only GIAO (the default) maps onto
+        # it; NMR=CSGT etc. are carried through verbatim instead.
+        nmr_opts = [o.upper() for o in keywords.get("NMR", (None, None, ["X"]))[2]]
+        if "NMR" in keywords and set(nmr_opts) <= {"GIAO"}:
             self.nmr_chk.setChecked(True)
         if re.search(r"\bPOLAR\b", route_upper):
             self.polar_chk.setChecked(True)

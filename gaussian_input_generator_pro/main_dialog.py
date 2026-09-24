@@ -65,6 +65,52 @@ def _zm_well_conditioned(angle_deg: float) -> bool:
     return _ZM_LINEAR_TOL_DEG < angle_deg < 180.0 - _ZM_LINEAR_TOL_DEG
 
 
+def _is_ghost_symbol(symbol: str) -> bool:
+    """Bq, El-Bq (Gaussian) and El: (ORCA) carry basis functions, no electrons."""
+    s = symbol.strip()
+    return s.endswith(":") or s.upper() == "BQ" or s.upper().endswith("-BQ")
+
+
+def _atom_symbol(atom) -> str:
+    """The symbol for a Gaussian coordinate line.
+
+    The shared ``custom_symbol`` property may hold ORCA's ghost notation
+    ("H:", written by XYZ Editor or NICS Placer's ORCA option); Gaussian
+    spells the same ghost "H-Bq".
+    """
+    if not atom.HasProp("custom_symbol"):
+        return atom.GetSymbol()
+    symbol = atom.GetProp("custom_symbol").strip()
+    if symbol.endswith(":") and len(symbol) > 1:
+        return symbol[:-1] + "-Bq"
+    return symbol
+
+
+def _electron_count(mol, charge: int) -> int:
+    """Electrons of the neutral-minus-charge system, ghosts excluded."""
+    protons = 0
+    for atom in mol.GetAtoms():
+        if atom.HasProp("custom_symbol") and _is_ghost_symbol(
+            atom.GetProp("custom_symbol")
+        ):
+            continue
+        protons += atom.GetAtomicNum()
+    return protons - charge
+
+
+def _charge_signature(mol):
+    """What calc_initial_charge_mult reads; a change means recompute."""
+    return tuple(
+        (
+            a.GetAtomicNum(),
+            a.GetFormalCharge(),
+            a.GetNumRadicalElectrons(),
+            a.GetProp("custom_symbol") if a.HasProp("custom_symbol") else "",
+        )
+        for a in mol.GetAtoms()
+    )
+
+
 class GaussianSetupDialogPro(QDialog):
     """
     Gaussian Input Generator Pro
@@ -346,6 +392,12 @@ class GaussianSetupDialogPro(QDialog):
         link1_form.addRow("Geometry source:", self.link1_geom_src)
         link1_inner.addLayout(link1_form)
 
+        self.link1_geom_warning = QLabel()
+        self.link1_geom_warning.setWordWrap(True)
+        self.link1_geom_warning.setStyleSheet("color: #b35900;")
+        self.link1_geom_warning.setVisible(False)
+        link1_inner.addWidget(self.link1_geom_warning)
+
         link1_tail_group = QGroupBox("Tail (Job 2)")
         link1_tail_layout = QVBoxLayout()
         self.link1_tail_edit = QTextEdit()
@@ -436,6 +488,47 @@ class GaussianSetupDialogPro(QDialog):
     def _update_link1_ui(self):
         self.link1_container.setVisible(self.link1_enable.isChecked())
 
+    def _link1_geometry_warning(self):
+        """Why the Link1 geometry source does not fit the routes, or ''."""
+        if not self.link1_enable.isChecked():
+            return ""
+        job1 = self.keywords_edit.toPlainText().upper()
+        job2 = self.link1_route_edit.toPlainText().upper()
+        reads_chk = re.search(r"\bGEOM\s*=\s*\(?\s*(ALL)?CHECK", job2) is not None
+        if "Copy coordinates" in self.link1_geom_src.currentText():
+            if reads_chk:
+                return (
+                    "Job 2 reads its geometry from the checkpoint (Geom=Check), "
+                    "so the copied coordinates would be read as the next input "
+                    "section. Choose Checkpoint, or remove Geom=Check."
+                )
+            if re.search(r"\bOPT\b", job1):
+                return (
+                    "Job 1 optimizes, but the copied coordinates are the "
+                    "starting geometry: Job 2 would not run on the optimized "
+                    "structure (a Freq there is not at a stationary point). "
+                    "Use Checkpoint (Geom=Check) to take the optimized one."
+                )
+        elif not reads_chk:
+            return (
+                "Geometry source is Checkpoint, but the Job 2 route has no "
+                "Geom=Check / Geom=AllCheck, so Gaussian will expect "
+                "coordinates that are not there."
+            )
+        return ""
+
+    def _update_link1_warning(self):
+        label = getattr(self, "link1_geom_warning", None)
+        if label is None:
+            return
+        try:
+            text = self._link1_geometry_warning()
+        except Exception as _e:
+            logging.warning("link1 geometry check failed: %s", _e)
+            text = ""
+        label.setText(text)
+        label.setVisible(bool(text))
+
     def _on_relay_tag_toggled(self, checked: bool) -> None:
         self.relay_tag_settings_widget.setVisible(checked)
         if checked:
@@ -513,12 +606,7 @@ class GaussianSetupDialogPro(QDialog):
             conf = self.mol.GetConformer()
             for i in range(self.mol.GetNumAtoms()):
                 pos = conf.GetAtomPosition(i)
-                atom = self.mol.GetAtomWithIdx(i)
-                symbol = (
-                    atom.GetProp("custom_symbol")
-                    if atom.HasProp("custom_symbol")
-                    else atom.GetSymbol()
-                )
+                symbol = _atom_symbol(self.mol.GetAtomWithIdx(i))
                 lines.append(
                     f"{symbol: <4} {pos.x: >12.6f} {pos.y: >12.6f} {pos.z: >12.6f}"
                 )
@@ -541,11 +629,7 @@ class GaussianSetupDialogPro(QDialog):
         z_data = []
 
         for i, atom in enumerate(atoms):
-            symbol = (
-                atom.GetProp("custom_symbol")
-                if atom.HasProp("custom_symbol")
-                else atom.GetSymbol()
-            )
+            symbol = _atom_symbol(atom)
 
             if i == 0:
                 z_data.append({"symbol": symbol, "refs": [], "values": []})
@@ -663,9 +747,30 @@ class GaussianSetupDialogPro(QDialog):
     # Preview / generation
     # ------------------------------------------------------------------
 
+    def _refresh_charge_mult_if_molecule_changed(self):
+        """Recompute charge/mult when the live molecule is no longer the one
+        they were derived from.
+
+        Coordinates are read live on every preview, so without this an edit
+        made while the dialog is open (a proton removed, a charge added)
+        would be written with the charge of the molecule as it was.
+        """
+        if not self._resolve_live_mol():
+            return
+        try:
+            signature = _charge_signature(self.mol)
+        except Exception as _e:
+            logging.warning("charge signature failed: %s", _e)
+            return
+        if signature != getattr(self, "_charge_signature", None):
+            self.calc_initial_charge_mult()
+
     def update_preview(self):
         if not getattr(self, "ui_ready", False):
             return
+
+        self._refresh_charge_mult_if_molecule_changed()
+        self._update_link1_warning()
 
         if self.persistent_settings is not None:
             p = self.persistent_settings
@@ -1199,6 +1304,7 @@ class GaussianSetupDialogPro(QDialog):
         if not self._resolve_live_mol():
             return
         try:
+            self._charge_signature = _charge_signature(self.mol)
             try:
                 charge = Chem.GetFormalCharge(self.mol)
             except Exception:
@@ -1219,8 +1325,7 @@ class GaussianSetupDialogPro(QDialog):
         try:
             charge = self.charge_spin.value()
             mult = self.mult_spin.value()
-            total_protons = sum(atom.GetAtomicNum() for atom in self.mol.GetAtoms())
-            total_electrons = total_protons - charge
+            total_electrons = _electron_count(self.mol, charge)
             is_valid = (total_electrons % 2 == 0 and mult % 2 != 0) or (
                 total_electrons % 2 != 0 and mult % 2 == 0
             )
