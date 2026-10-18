@@ -11,7 +11,7 @@ PLUGIN_DESCRIPTION = "Advanced Gaussian Input Generator with Preview and Presets
 PLUGIN_CATEGORY = "Export"
 PLUGIN_TAGS = ["File", "Generator"]
 PLUGIN_DEPENDENCIES = []  # PySide6/RDKit come from the host app; psutil is optional
-PLUGIN_SUPPORTED_MOLEDITPY_VERSION = ">=5.0.0a1, <6.0.0"
+PLUGIN_SUPPORTED_MOLEDITPY_VERSION = ">=5.0.0, <6.0.0"
 SETTINGS_FILE = os.path.join(os.path.dirname(__file__), "settings.json")
 
 
