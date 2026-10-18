@@ -1,7 +1,7 @@
 import os
 import json
 import re
-from PyQt6.QtWidgets import (
+from PySide6.QtWidgets import (
     QDialog,
     QVBoxLayout,
     QHBoxLayout,
@@ -21,8 +21,8 @@ from PyQt6.QtWidgets import (
     QInputDialog,
     QCheckBox,
 )
-from PyQt6.QtGui import QFont, QPalette, QColor, QKeySequence, QShortcut
-from PyQt6.QtCore import Qt
+from PySide6.QtGui import QFont, QPalette, QColor, QKeySequence, QShortcut
+from PySide6.QtCore import Qt
 
 from rdkit import Chem
 from rdkit.Chem import rdMolTransforms

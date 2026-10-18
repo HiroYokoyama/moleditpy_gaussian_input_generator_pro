@@ -3,11 +3,11 @@ tests/test_highlighter_extended.py
 
 Behavioural tests for GaussianSyntaxHighlighter (highlighter.py).
 
-Unlike test_keyword_builder_extended.py, which stubs PyQt6 so pure-logic
-paths run without a GUI toolkit, this file needs the *real* PyQt6:
+Unlike test_keyword_builder_extended.py, which stubs PySide6 so pure-logic
+paths run without a GUI toolkit, this file needs the *real* PySide6:
 QSyntaxHighlighter/QRegularExpression behaviour is what is under test, and a
 stub cannot tell us whether a pattern flag actually exists or a rule
-actually matches. The whole module is skipped when PyQt6 is unavailable
+actually matches. The whole module is skipped when PySide6 is unavailable
 (as it is in the bare-pytest CI job), so it never causes a collection
 error there.
 
@@ -27,15 +27,15 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 _REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 
 try:
-    from PyQt6.QtGui import QTextDocument
-    from PyQt6.QtWidgets import QApplication
-except ImportError:  # pragma: no cover - exercised only on PyQt6-less runs
+    from PySide6.QtGui import QTextDocument
+    from PySide6.QtWidgets import QApplication
+except ImportError:  # pragma: no cover - exercised only on PySide6-less runs
     QApplication = None
 
 if QApplication is None:
     import pytest
 
-    pytest.skip("requires real PyQt6 (host app dep)", allow_module_level=True)
+    pytest.skip("requires real PySide6 (host app dep)", allow_module_level=True)
 
 
 def _load_highlighter():

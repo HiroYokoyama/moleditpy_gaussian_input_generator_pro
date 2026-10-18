@@ -1,9 +1,11 @@
 # MoleditPy Gaussian Input Generator Pro
 
+This branch targets **MoleditPy 5.0.0a1–5.x** and uses **PySide6**. Plugin licensing is unchanged.
+
 [![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21307661.svg)](https://doi.org/10.5281/zenodo.21307661)
 [![Tests](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/actions/workflows/tests.yml/badge.svg)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/actions/workflows/tests.yml)
 ![Test Coverage](https://img.shields.io/badge/coverage->90%25-green)
-[![MoleditPy](https://img.shields.io/badge/MoleditPy->=4.0.0-3577F7)](https://github.com/HiroYokoyama/python_molecular_editor)
+[![MoleditPy](https://img.shields.io/badge/MoleditPy->=5.0.0a1-3577F7)](https://github.com/HiroYokoyama/python_molecular_editor)
 [![GitHub tag](https://img.shields.io/github/v/tag/HiroYokoyama/moleditpy_gaussian_input_generator_pro?label=version)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/tags)
 [![GitHub Downloads](https://img.shields.io/github/downloads/HiroYokoyama/moleditpy_gaussian_input_generator_pro/total)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/releases)
 
@@ -241,13 +243,13 @@ cd moleditpy_gaussian_input_generator_pro
 python -m pytest tests/ -v
 ```
 
-All tests run headlessly — PyQt6 and RDKit are stubbed, no GUI or network required. `tests/test_api.py` and `tests/test_plugin_integration.py` additionally exercise the real `PluginContext` when the main MoleditPy app repo is present as a sibling directory.
+All tests run headlessly — PySide6 and RDKit are stubbed, no GUI or network required. `tests/test_api.py` and `tests/test_plugin_integration.py` additionally exercise the real `PluginContext` when the main MoleditPy app repo is present as a sibling directory.
 
 ---
 
 ## Dependencies
 
-- **PyQt6** — graphical interface
+- **PySide6** — graphical interface
 - **RDKit** — molecular geometry and property handling
 
 ---
