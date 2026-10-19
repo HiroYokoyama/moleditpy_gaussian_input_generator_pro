@@ -19,8 +19,8 @@ tests/test_parse_route_extended.py or tests/test_constraints_picking.py:
   - parse_route() branches not covered elsewhere (bare semi-empirical
     method fallback, 50-50 TD states, bare SCF=Tight/SCF=XQC)
 
-Same stub technique as test_keyword_builder.py: PyQt6/RDKit are stubbed
-(no-op if a real PyQt6 is already on sys.modules, e.g. via conftest.py),
+Same stub technique as test_keyword_builder.py: PySide6/RDKit are stubbed
+(no-op if a real PySide6 is already on sys.modules, e.g. via conftest.py),
 and the dialog's methods are exercised unbound against small stateful fake
 widgets or SimpleNamespace fakes -- never by instantiating the real QDialog.
 """
@@ -37,17 +37,17 @@ _REPO_ROOT = os.path.normpath(os.path.join(os.path.dirname(__file__), ".."))
 
 
 def _install_stubs():
-    if "PyQt6" in sys.modules:
+    if "PySide6" in sys.modules:
         return
 
     class _Base:
         def __init__(self, *a, **kw):
             pass
 
-    pyqt6 = types.ModuleType("PyQt6")
-    qt_widgets = types.ModuleType("PyQt6.QtWidgets")
-    qt_core = types.ModuleType("PyQt6.QtCore")
-    qt_gui = types.ModuleType("PyQt6.QtGui")
+    pyside6 = types.ModuleType("PySide6")
+    qt_widgets = types.ModuleType("PySide6.QtWidgets")
+    qt_core = types.ModuleType("PySide6.QtCore")
+    qt_gui = types.ModuleType("PySide6.QtGui")
 
     for name in ["QDialog", "QWidget"]:
         setattr(qt_widgets, name, _Base)
@@ -84,16 +84,16 @@ def _install_stubs():
     qt_gui.QKeySequence = MagicMock
     qt_gui.QShortcut = MagicMock
 
-    pyqt6.QtWidgets = qt_widgets
-    pyqt6.QtCore = qt_core
-    pyqt6.QtGui = qt_gui
+    pyside6.QtWidgets = qt_widgets
+    pyside6.QtCore = qt_core
+    pyside6.QtGui = qt_gui
 
     sys.modules.update(
         {
-            "PyQt6": pyqt6,
-            "PyQt6.QtWidgets": qt_widgets,
-            "PyQt6.QtCore": qt_core,
-            "PyQt6.QtGui": qt_gui,
+            "PySide6": pyside6,
+            "PySide6.QtWidgets": qt_widgets,
+            "PySide6.QtCore": qt_core,
+            "PySide6.QtGui": qt_gui,
             "rdkit": MagicMock(),
             "rdkit.Chem": MagicMock(),
         }
