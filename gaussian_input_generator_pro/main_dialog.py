@@ -1159,7 +1159,10 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
                 with open(file_path, "w", encoding="utf-8") as f:
                     f.write(content)
 
-                self.preview_text.setPlainText(content)
+                if getattr(self, "_text_override", False):
+                    self.preview_text.setPlainText(content)
+                else:
+                    self._write_generated_preview(content)
                 self.current_inp_file = file_path
                 self._saved_inp_content = content
                 self._update_title()
@@ -1438,7 +1441,10 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
                 content = self._rewrite_chk(content, saved_base)
             with open(self.current_inp_file, "w", encoding="utf-8") as f:
                 f.write(content)
-            self.preview_text.setPlainText(content)
+            if getattr(self, "_text_override", False):
+                self.preview_text.setPlainText(content)
+            else:
+                self._write_generated_preview(content)
             self._saved_inp_content = content
             self._current_content = content
             self._update_title()
