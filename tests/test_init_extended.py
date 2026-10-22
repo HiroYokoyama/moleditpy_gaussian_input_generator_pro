@@ -60,9 +60,7 @@ try:
     ):
         _real_module(_dep)
 except ImportError:  # bare-pytest CI has neither PySide6 nor RDKit installed
-    pytest.skip(
-        "requires real PySide6/RDKit (host app deps)", allow_module_level=True
-    )
+    pytest.skip("requires real PySide6/RDKit (host app deps)", allow_module_level=True)
 
 _real_pyside6_pkg = sys.modules["PySide6"]
 _real_pyside6_pkg.QtWidgets = sys.modules["PySide6.QtWidgets"]
@@ -218,8 +216,16 @@ class TestRunFilenameDetection(_BaseInitTestCase):
         captured = {}
 
         class _FakeDialog:
-            def __init__(self, parent, mol, filename, persistent_settings,
-                         mark_modified, get_molecule):
+            def __init__(
+                self,
+                parent,
+                mol,
+                filename,
+                persistent_settings,
+                mark_modified,
+                get_molecule,
+                display_molecule=None,
+            ):
                 captured["filename"] = filename
 
             def show(self):

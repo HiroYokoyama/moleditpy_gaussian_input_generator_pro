@@ -1,39 +1,38 @@
-import os
 import json
+import logging
+import os
 import re
-from PySide6.QtWidgets import (
-    QDialog,
-    QVBoxLayout,
-    QHBoxLayout,
-    QScrollArea,
-    QWidget,
-    QGroupBox,
-    QFormLayout,
-    QSpinBox,
-    QPushButton,
-    QLabel,
-    QTextEdit,
-    QLineEdit,
-    QComboBox,
-    QSizePolicy,
-    QMessageBox,
-    QFileDialog,
-    QInputDialog,
-    QCheckBox,
-)
-from PySide6.QtGui import QFont, QPalette, QColor, QKeySequence, QShortcut
-from PySide6.QtCore import Qt
 
+from PySide6.QtCore import Qt
+from PySide6.QtGui import QColor, QFont, QKeySequence, QPalette, QShortcut
+from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QDialog,
+    QFileDialog,
+    QFormLayout,
+    QGroupBox,
+    QHBoxLayout,
+    QInputDialog,
+    QLabel,
+    QLineEdit,
+    QMessageBox,
+    QPushButton,
+    QScrollArea,
+    QSizePolicy,
+    QSpinBox,
+    QTextEdit,
+    QVBoxLayout,
+    QWidget,
+)
 from rdkit import Chem
 from rdkit.Chem import rdMolTransforms
 
-from . import cluster_link
-from .highlighter import GaussianSyntaxHighlighter
-from .keyword_builder import GaussianRouteBuilderDialog, parse_modredundant_line
+from . import PLUGIN_NAME, PLUGIN_VERSION, SETTINGS_FILE, cluster_link
 from .constants import TAIL_TEMPLATES
-from . import PLUGIN_NAME, PLUGIN_VERSION, SETTINGS_FILE
-import logging
-
+from .highlighter import GaussianSyntaxHighlighter
+from .input_loading import InputLoadingMixin
+from .keyword_builder import GaussianRouteBuilderDialog, parse_modredundant_line
 
 # Priority order used for auto-suffix detection (first match wins).
 _AUTO_SUFFIX_RULES = [
@@ -111,7 +110,8 @@ def _charge_signature(mol):
     )
 
 
-class GaussianSetupDialogPro(QDialog):
+class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
+    INPUT_KIND = "gaussian"
     """
     Gaussian Input Generator Pro
     """
@@ -124,6 +124,7 @@ class GaussianSetupDialogPro(QDialog):
         persistent_settings=None,
         mark_modified=None,
         get_molecule=None,
+        display_molecule=None,
     ):
         super().__init__(parent)
         self.setWindowTitle(f"{PLUGIN_NAME} v{PLUGIN_VERSION}")
@@ -135,6 +136,9 @@ class GaussianSetupDialogPro(QDialog):
         self.persistent_settings = persistent_settings
         self.mark_modified = mark_modified
         self.get_molecule = get_molecule
+        self.display_molecule = display_molecule
+        saved_text = (persistent_settings or {}).get("input_text")
+        self._text_override = False
         self.current_inp_file = None  # path of the .gjf file last saved/opened
         self._saved_inp_content = None  # content at last save (for dirty detection)
         self._current_content = ""  # cached output of the most recent generate
@@ -147,6 +151,8 @@ class GaussianSetupDialogPro(QDialog):
         self.calc_initial_charge_mult()
         self.ui_ready = True
         self.update_preview()  # earlier calls no-op'd while ui_ready was False
+        if isinstance(saved_text, str):
+            self.restore_input_text(saved_text)
 
     # ------------------------------------------------------------------
     # UI construction
@@ -163,6 +169,7 @@ class GaussianSetupDialogPro(QDialog):
         scroll_area.setFrameShape(QScrollArea.Shape.NoFrame)
 
         settings_container = QWidget()
+        self.input_settings_widget = settings_container
         settings_layout = QVBoxLayout(settings_container)
 
         # --- Preset Management ---
@@ -420,6 +427,7 @@ class GaussianSetupDialogPro(QDialog):
         preview_group = QGroupBox("Input Preview")
         preview_layout = QVBoxLayout()
         self.preview_text = QTextEdit()
+        self.preview_text.textChanged.connect(self._input_text_edited)
         self.preview_text.setReadOnly(False)
         self.preview_text.setFont(QFont("Courier New", 10))
         self.preview_text.setSizePolicy(
@@ -427,8 +435,17 @@ class GaussianSetupDialogPro(QDialog):
         )
         self.highlighter = GaussianSyntaxHighlighter(self.preview_text.document())
         preview_layout.addWidget(self.preview_text)
+        self.input_notice = QLabel(
+            "Full input text is authoritative. Edit Preview directly; Reset/Refresh regenerates from settings."
+        )
+        self.input_notice.setWordWrap(True)
+        self.input_notice.hide()
+        preview_layout.addWidget(self.input_notice)
+        recover_btn = QPushButton("Recover Conditions from Text")
+        recover_btn.clicked.connect(self.recover_input_conditions)
+        preview_layout.addWidget(recover_btn)
         btn_refresh = QPushButton("Reset/Refresh Preview")
-        btn_refresh.clicked.connect(self.update_preview)
+        btn_refresh.clicked.connect(self.refresh_input_preview)
         preview_layout.addWidget(btn_refresh)
         preview_group.setLayout(preview_layout)
         content_layout.addWidget(preview_group, 4)
@@ -473,6 +490,9 @@ class GaussianSetupDialogPro(QDialog):
         self.submit_btn.setVisible(cluster_link.is_available(self.parent()))
 
         btn_layout.addWidget(self.btn_close)
+        self.load_btn = QPushButton("Load Input File...")
+        self.load_btn.clicked.connect(self.load_input_file)
+        btn_layout.addWidget(self.load_btn)
         btn_layout.addWidget(self.submit_btn)
         btn_layout.addWidget(self.save_btn)
 
@@ -570,7 +590,6 @@ class GaussianSetupDialogPro(QDialog):
             )
         else:
             self.accept()
-
 
     def insert_tail_template(self):
         name = self.tail_template_combo.currentText()
@@ -768,6 +787,8 @@ class GaussianSetupDialogPro(QDialog):
     def update_preview(self):
         if not getattr(self, "ui_ready", False):
             return
+        if getattr(self, "_text_override", False):
+            return
 
         self._refresh_charge_mult_if_molecule_changed()
         self._update_link1_warning()
@@ -790,7 +811,10 @@ class GaussianSetupDialogPro(QDialog):
             p["coord_format"] = self.coord_format_combo.currentText()
 
         self._current_content = self.generate_input_content()
-        self.preview_text.setText(self._current_content)
+        if hasattr(self, "input_settings_widget"):
+            self._write_generated_preview(self._current_content)
+        else:
+            self.preview_text.setText(self._current_content)
         self._update_title()
 
         if self.mark_modified is not None:
@@ -1079,7 +1103,11 @@ class GaussianSetupDialogPro(QDialog):
     # ------------------------------------------------------------------
 
     def save_file(self):
-        coord_lines = self._get_active_coord_lines()
+        coord_lines = (
+            []
+            if getattr(self, "_text_override", False)
+            else self._get_active_coord_lines()
+        )
         if any("Error" in line for line in coord_lines):
             err = "\n".join(line for line in coord_lines if "Error" in line)
             QMessageBox.critical(self, "Error", f"Coordinate Generation Failed:\n{err}")
@@ -1122,17 +1150,21 @@ class GaussianSetupDialogPro(QDialog):
             try:
                 content = self.preview_text.toPlainText()
                 saved_base = os.path.splitext(os.path.basename(file_path))[0]
-                content = self._rewrite_chk(content, saved_base)
+                if (
+                    not getattr(self, "_text_override", False)
+                    and not self.chk_edit.text().strip()
+                ):
+                    content = self._rewrite_chk(content, saved_base)
 
                 with open(file_path, "w", encoding="utf-8") as f:
                     f.write(content)
 
-                self.preview_text.setText(content)
+                self.preview_text.setPlainText(content)
                 self.current_inp_file = file_path
                 self._saved_inp_content = content
                 self._update_title()
             except Exception as e:
-                QMessageBox.critical(self, "Error", f"Failed to save file:\n{str(e)}")
+                QMessageBox.critical(self, "Error", f"Failed to save file:\n{e!s}")
 
     def _auto_suffix(self):
         kw = self.keywords_edit.toPlainText().upper()
@@ -1398,10 +1430,15 @@ class GaussianSetupDialogPro(QDialog):
             return
         try:
             saved_base = os.path.splitext(os.path.basename(self.current_inp_file))[0]
-            content = self._rewrite_chk(self.preview_text.toPlainText(), saved_base)
+            content = self.preview_text.toPlainText()
+            if (
+                not getattr(self, "_text_override", False)
+                and not self.chk_edit.text().strip()
+            ):
+                content = self._rewrite_chk(content, saved_base)
             with open(self.current_inp_file, "w", encoding="utf-8") as f:
                 f.write(content)
-            self.preview_text.setText(content)
+            self.preview_text.setPlainText(content)
             self._saved_inp_content = content
             self._current_content = content
             self._update_title()
