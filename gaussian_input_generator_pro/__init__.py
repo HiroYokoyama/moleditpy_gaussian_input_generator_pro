@@ -1,9 +1,10 @@
 import logging
 import os
+
 from PySide6.QtWidgets import QMessageBox
 
 PLUGIN_NAME = "Gaussian Input Generator Pro"
-PLUGIN_VERSION = "2.0.0"
+PLUGIN_VERSION = "2.1.0"
 PLUGIN_AUTHOR = "HiroYokoyama"
 
 
@@ -39,7 +40,7 @@ _dialog_opened = False  # Guard: don't write to project file until dialog is use
 _context = None  # Stored from initialize() so run() can use the context API
 
 
-def run(mw):
+def run(mw, input_file=None):
     global _dialog_opened
 
     # Prefer the stable context API over direct mw access
@@ -58,7 +59,11 @@ def run(mw):
     except Exception as e:
         logging.warning("Gaussian plugin: could not get current molecule: %s", e)
         mol = None
-    if not mol:
+    if (
+        not mol
+        and not input_file
+        and not isinstance(current_settings.get("input_text"), str)
+    ):
         QMessageBox.warning(mw, PLUGIN_NAME, "No molecule loaded.")
         return
 
@@ -75,6 +80,8 @@ def run(mw):
     if _context is not None:
         dlg = _context.get_window("dialog")
         if dlg is not None and dlg.isVisible():
+            if input_file:
+                dlg.load_input_file(input_file)
             dlg.raise_()
             dlg.activateWindow()
             return
@@ -90,6 +97,14 @@ def run(mw):
             return _context.current_molecule
         return getattr(mw, "current_mol", None)
 
+    def _display_molecule(loaded):
+        if _context is not None:
+            _context.current_molecule = loaded
+            _context.enter_3d_viewer_mode()
+            _context.set_3d_features_enabled(True)
+            _context.reset_3d_camera()
+            _context.mark_project_modified()
+
     dlg = GaussianSetupDialogPro(
         parent=mw,
         mol=mol,
@@ -97,10 +112,13 @@ def run(mw):
         persistent_settings=current_settings,
         mark_modified=_mark_modified,
         get_molecule=_get_molecule,
+        display_molecule=_display_molecule,
     )
     if _context is not None:
         _context.register_window("dialog", dlg)
     dlg.show()
+    if input_file:
+        dlg.load_input_file(input_file)
 
 
 def initialize(context):
@@ -112,6 +130,22 @@ def initialize(context):
         run(mw)
 
     context.add_export_action("Gaussian Input...", show_dialog)
+
+    def load_input():
+        from PySide6.QtWidgets import QFileDialog
+
+        path, _ = QFileDialog.getOpenFileName(
+            context.get_main_window(),
+            "Load Gaussian Input",
+            "",
+            "Gaussian input (*.gjf *.com);;All files (*)",
+        )
+        if path:
+            run(context.get_main_window(), input_file=path)
+
+    add_menu_action = getattr(context, "add_menu_action", None)
+    if callable(add_menu_action):
+        add_menu_action("File/Import/Gaussian Input...", load_input)
 
     # Register Persistence Handlers
     def on_save():
