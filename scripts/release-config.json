@@ -1,0 +1,19 @@
+{
+  "source": "gaussian_input_generator_pro/__init__.py",
+  "title": "Gaussian Input Generator Pro",
+  "package": "gaussian_input_generator_pro",
+  "archive": "gaussian_input_generator_pro_{version}.zip",
+  "assets": [
+    "gaussian_input_generator_pro_{version}.zip"
+  ],
+  "include": [
+    "README.md",
+    "LICENSE",
+    "COPYING",
+    "LICENSING.md"
+  ],
+  "exclude": [
+    "*/__pycache__/*",
+    "*/.git/*"
+  ]
+}
