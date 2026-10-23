@@ -13,8 +13,7 @@ without a molecule loaded), or **Load Input File...** in the generator.
 Gaussian `.gjf` and `.com` files are displayed verbatim in the editable
 Preview. Supported Job 1 conditions are recovered into the form, including
 resources, keywords, charge and multiplicity. Cartesian and ordinary Z-matrix
-coordinates can be displayed in 3D; ORCA external XYZ paths resolve relative to
-the input file. Unsupported syntax is retained as text with an explanatory
+coordinates can be displayed in 3D. Unsupported syntax is retained as text with an explanatory
 notice. Additional jobs, custom blocks and unknown commands remain in Preview.
 
 Imported or directly edited text takes priority over generated settings.
@@ -69,7 +68,7 @@ Repo: [https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro](h
 | Geometry Optimisation | `Opt` |
 | Frequency | `Freq` |
 | Opt + Freq | `Opt Freq` |
-| Transition State | `Opt=(TS,CalcFC,NoEigenTest)` |
+| Transition State | `Opt=TS` (optional `CalcFC`; `NoEigenTest` only when explicitly requested) |
 | Scan (relaxed coordinate) | `Opt=ModRedundant` |
 | IRC | `IRC=(CalcFC,MaxPoints=N)` |
 | Stability Analysis | `Stable` |
@@ -291,3 +290,19 @@ Provided *as is* without warranty. Users are responsible for validating outputs 
 ## Licensing scope
 
 First-party code in this migration is LGPL-3.0-or-later. See [LICENSE](LICENSE), [COPYING](COPYING) and [dependency/provenance terms](LICENSING.md). Third-party components and historical releases retain their own terms.
+
+## Input correctness audit (2026-10-24)
+
+Generated coordinates honor each job's explicit length/angle units. Loading an
+input and refreshing it preserves ghost-atom identity and physical bond lengths.
+Builders retain omitted/default basis choices rather than injecting their own
+default basis into an existing input. The complete imported/edited text remains
+authoritative until Reset/Refresh.
+
+`Geom=Check` omits coordinates; `Geom=AllCheck` also omits title and
+charge/multiplicity. Job 2 continues Job 1's checkpoint without recopying
+`%oldchk`. Choosing Checkpoint for Job 2 adds `Geom=Check` if missing; explicit
+checkpoint route keywords take precedence over Copy coordinates. A TS job no
+longer adds `NoEigenTest` automatically.
+
+See [the audit record](docs/INPUT_AUDIT.md) for sources and validation limits.

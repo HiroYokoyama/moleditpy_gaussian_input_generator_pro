@@ -217,14 +217,20 @@ def _make_dialog(
     )
     dlg.link1_tail_edit = _TextEdit("")
 
-    _coords = coords if coords is not None else ["C     0.000000     0.000000     0.000000"]
+    _coords = (
+        coords if coords is not None else ["C     0.000000     0.000000     0.000000"]
+    )
     dlg.get_coords_lines = lambda: _coords
     # No coord_format_combo on the fake -> dispatches to Cartesian
-    dlg._get_active_coord_lines = lambda: GaussianSetupDialogPro._get_active_coord_lines(dlg)
+    dlg._get_active_coord_lines = lambda: (
+        GaussianSetupDialogPro._get_active_coord_lines(dlg)
+    )
 
     dlg._mem_line = lambda: GaussianSetupDialogPro._mem_line(dlg)
     dlg._wfn_filename_hint = lambda: GaussianSetupDialogPro._wfn_filename_hint(dlg)
-    dlg.generate_input_content = lambda: GaussianSetupDialogPro.generate_input_content(dlg)
+    dlg.generate_input_content = lambda: GaussianSetupDialogPro.generate_input_content(
+        dlg
+    )
     dlg._auto_suffix = lambda: GaussianSetupDialogPro._auto_suffix(dlg)
 
     return dlg
@@ -365,13 +371,16 @@ class TestLink1Section(unittest.TestCase):
         dlg = _make_dialog(coords=["C 0.0 0.0 0.0"])
         dlg.link1_enable.setChecked(True)
         dlg.link1_geom_src.setCurrentText("Copy coordinates")
+        dlg.link1_route_edit.setPlainText("# HF/STO-3G Freq")
         content = dlg.generate_input_content()
         self.assertEqual(content.count("C 0.0 0.0 0.0"), 2)
 
     def test_link1_route_and_title_present(self):
         dlg = _make_dialog()
         dlg.link1_enable.setChecked(True)
-        dlg.link1_route_edit.setPlainText("#P B3LYP/6-31G(d) Freq Geom=Check Guess=Read")
+        dlg.link1_route_edit.setPlainText(
+            "#P B3LYP/6-31G(d) Freq Geom=Check Guess=Read"
+        )
         dlg.link1_title_edit.setText("Freq Job")
         content = dlg.generate_input_content()
         self.assertIn("#P B3LYP/6-31G(d) Freq Geom=Check Guess=Read", content)
@@ -501,7 +510,9 @@ def _make_preset_dialog():
     dlg._update_link1_ui = lambda: None
     dlg.update_preset_combo = lambda: None
     dlg.save_presets_to_file = lambda: None
-    dlg.apply_selected_preset = lambda: GaussianSetupDialogPro.apply_selected_preset(dlg)
+    dlg.apply_selected_preset = lambda: GaussianSetupDialogPro.apply_selected_preset(
+        dlg
+    )
     return dlg
 
 
@@ -526,9 +537,7 @@ class TestPresetLink1TitlePersistence(unittest.TestCase):
             "link1_tail": dlg.link1_tail_edit.toPlainText(),
             "coord_format": dlg.coord_format_combo.currentText(),
         }
-        self.assertEqual(
-            dlg.presets_data["MyPreset"]["link1_title"], "My Link1 Job"
-        )
+        self.assertEqual(dlg.presets_data["MyPreset"]["link1_title"], "My Link1 Job")
 
     def test_apply_selected_preset_restores_link1_title(self):
         dlg = _make_preset_dialog()

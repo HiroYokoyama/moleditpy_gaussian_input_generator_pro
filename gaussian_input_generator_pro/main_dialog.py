@@ -1,5 +1,6 @@
 import json
 import logging
+import math
 import os
 import re
 
@@ -31,7 +32,7 @@ from rdkit.Chem import rdMolTransforms
 from . import PLUGIN_NAME, PLUGIN_VERSION, SETTINGS_FILE, cluster_link
 from .constants import TAIL_TEMPLATES
 from .highlighter import GaussianSyntaxHighlighter
-from .input_loading import InputLoadingMixin
+from .input_loading import InputLoadingMixin, checkpoint_geometry, coordinates_for_route
 from .keyword_builder import GaussianRouteBuilderDialog, parse_modredundant_line
 
 # Priority order used for auto-suffix detection (first match wins).
@@ -514,7 +515,7 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
             return ""
         job1 = self.keywords_edit.toPlainText().upper()
         job2 = self.link1_route_edit.toPlainText().upper()
-        reads_chk = re.search(r"\bGEOM\s*=\s*\(?\s*(ALL)?CHECK", job2) is not None
+        reads_chk = bool(checkpoint_geometry(job2))
         if "Copy coordinates" in self.link1_geom_src.currentText():
             if reads_chk:
                 return (
@@ -625,6 +626,8 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
             conf = self.mol.GetConformer()
             for i in range(self.mol.GetNumAtoms()):
                 pos = conf.GetAtomPosition(i)
+                if not all(math.isfinite(v) for v in (pos.x, pos.y, pos.z)):
+                    raise ValueError("Coordinates must be finite.")
                 symbol = _atom_symbol(self.mol.GetAtomWithIdx(i))
                 lines.append(
                     f"{symbol: <4} {pos.x: >12.6f} {pos.y: >12.6f} {pos.z: >12.6f}"
@@ -709,6 +712,10 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
                     rdMolTransforms.GetDihedralDeg(conf, i, refs[0], refs[1], refs[2])
                 )
 
+            if not all(math.isfinite(value) for value in row["values"]):
+                raise ValueError(
+                    "A linear reference plane cannot define this Z-matrix."
+                )
             z_data.append(row)
             defined.append(i)
 
@@ -919,7 +926,7 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
         chk = self.chk_edit.text().strip()
         if not chk:
             chk = f"{self._wfn_filename_hint()}.chk"
-        if not chk.endswith(".chk"):
+        if not chk.lower().endswith(".chk"):
             chk += ".chk"
         lines.append(f"%chk={chk}")
 
@@ -929,25 +936,38 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
         lines.append(route_line)
         lines.append("")
 
-        title = self.comment_edit.text().strip() or "Gaussian Job"
-        lines.append(title)
-        lines.append("")
+        geometry_source = checkpoint_geometry(route_line)
+        if geometry_source != "allcheck":
+            title = self.comment_edit.text().strip() or "Gaussian Job"
+            lines.append(title)
+            lines.append("")
+            lines.append(f"{charge} {mult}")
 
-        lines.append(f"{charge} {mult}")
-
-        coord_lines = self._get_active_coord_lines()
+        coord_lines = [] if geometry_source else self._get_active_coord_lines()
         if any("Error" in line for line in coord_lines):
             err = "\n".join(line for line in coord_lines if "Error" in line)
             return f"# Error generating coordinates: {err}"
-        lines.extend(coord_lines)
-        lines.append("")
+        style = (
+            self.coord_format_combo.currentText()
+            if hasattr(self, "coord_format_combo")
+            else "Cartesian"
+        )
+        if not geometry_source:
+            lines.extend(
+                coordinates_for_route(coord_lines, "gaussian", route_line, style)
+            )
+        if geometry_source != "allcheck":
+            lines.append("")
 
         tail = self.tail_edit.toPlainText().strip()
         if tail:
             lines.append(tail)
 
-        if "OUTPUT=WFN" in route_line.upper() or "OUTPUT=WFX" in route_line.upper():
-            ext = "wfx" if "OUTPUT=WFX" in route_line.upper() else "wfn"
+        output = re.search(
+            r"\boutput\s*=\s*\(?\s*(wfn|wfx)\b", route_line, re.IGNORECASE
+        )
+        if output:
+            ext = output[1].lower()
             lines.append(f"{self._wfn_filename_hint()}.{ext}")
 
         # Trim trailing blanks, then require exactly two trailing newlines.
@@ -963,24 +983,40 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
                 "--Link1--",
                 f"%chk={chk}",
             ]
-            if oldchk:
-                link1_lines.insert(1, f"%oldchk={oldchk}")
             link1_lines.append(f"%nprocshared={self.nproc_spin.value()}")
             link1_lines.append(self._mem_line())
+            copy_coords = "Copy coordinates" in self.link1_geom_src.currentText()
+            link1_source = checkpoint_geometry(link1_route)
+            if not copy_coords and not link1_source:
+                link1_route += " Geom=Check"
+                link1_source = "check"
             link1_lines.append(link1_route)
             link1_lines.append("")
-            link1_lines.append(self.link1_title_edit.text().strip() or "Gaussian Job")
-            link1_lines.append("")
-            link1_lines.append(f"{charge} {mult}")
-
-            copy_coords = "Copy coordinates" in self.link1_geom_src.currentText()
-            if copy_coords:
-                link1_lines.extend(coord_lines)
+            if link1_source != "allcheck":
+                link1_lines.append(
+                    self.link1_title_edit.text().strip() or "Gaussian Job"
+                )
+                link1_lines.append("")
+                link1_lines.append(f"{charge} {mult}")
+            if copy_coords and not link1_source:
+                if not coord_lines:
+                    coord_lines = self._get_active_coord_lines()
+                link1_lines.extend(
+                    coordinates_for_route(coord_lines, "gaussian", link1_route, style)
+                )
 
             link1_tail = self.link1_tail_edit.toPlainText().strip()
             if link1_tail:
-                link1_lines.append("")
+                if link1_source != "allcheck":
+                    link1_lines.append("")
                 link1_lines.append(link1_tail)
+            output = re.search(
+                r"\boutput\s*=\s*\(?\s*(wfn|wfx)\b", link1_route, re.IGNORECASE
+            )
+            if output:
+                link1_lines.extend(
+                    ["", f"{self._wfn_filename_hint()}-link1.{output[1].lower()}"]
+                )
 
             while link1_lines and link1_lines[-1] == "":
                 link1_lines.pop()
@@ -1103,9 +1139,16 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
     # ------------------------------------------------------------------
 
     def save_file(self):
+        coordinate_free = bool(checkpoint_geometry(self.keywords_edit.toPlainText()))
+        if (
+            self.link1_enable.isChecked()
+            and "Copy coordinates" in self.link1_geom_src.currentText()
+            and not checkpoint_geometry(self.link1_route_edit.toPlainText())
+        ):
+            coordinate_free = False
         coord_lines = (
             []
-            if getattr(self, "_text_override", False)
+            if getattr(self, "_text_override", False) or coordinate_free
             else self._get_active_coord_lines()
         )
         if any("Error" in line for line in coord_lines):
@@ -1361,8 +1404,9 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
             charge = self.charge_spin.value()
             mult = self.mult_spin.value()
             total_electrons = _electron_count(self.mol, charge)
-            is_valid = (total_electrons % 2 == 0 and mult % 2 != 0) or (
-                total_electrons % 2 != 0 and mult % 2 == 0
+            is_valid = (
+                0 <= mult - 1 <= total_electrons
+                and (total_electrons - mult + 1) % 2 == 0
             )
             if is_valid:
                 self.charge_spin.setPalette(self.default_palette)
