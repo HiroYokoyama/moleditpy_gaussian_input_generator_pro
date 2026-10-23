@@ -1,52 +1,51 @@
 import logging
 import re
+
 from PySide6 import QtCore
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
+    QCheckBox,
+    QComboBox,
+    QCompleter,
     QDialog,
-    QVBoxLayout,
+    QFormLayout,
+    QGroupBox,
     QHBoxLayout,
     QLabel,
     QLineEdit,
-    QSpinBox,
     QPushButton,
-    QGroupBox,
-    QComboBox,
-    QCompleter,
-    QTabWidget,
+    QScrollArea,
+    QSizePolicy,
+    QSpinBox,
     QTableWidget,
     QTableWidgetItem,
-    QCheckBox,
+    QTabWidget,
+    QVBoxLayout,
     QWidget,
-    QFormLayout,
-    QSizePolicy,
-    QScrollArea,
 )
-
-from .mixins import Dialog3DPickingMixin
 
 from .constants import (
-    ALL_GAUSSIAN_METHODS,
     ALL_GAUSSIAN_BASIS_SETS,
-    DFT_METHODS,
-    DOUBLE_HYBRID_METHODS,
-    WAVEFUNCTION_METHODS,
-    HF_METHODS,
-    SEMI_EMPIRICAL_METHODS,
-    POPLE_BASIS_SETS,
-    DUNNING_BASIS_SETS,
+    ALL_GAUSSIAN_METHODS,
     DEF2_BASIS_SETS,
-    ECP_BASIS_SETS,
-    SOLVATION_MODELS,
-    GAUSSIAN_SOLVENTS,
+    DFT_METHODS,
     DISPERSION_OPTIONS,
+    DOUBLE_HYBRID_METHODS,
+    DUNNING_BASIS_SETS,
+    ECP_BASIS_SETS,
+    GAUSSIAN_SEARCH_CATALOG,
+    GAUSSIAN_SOLVENTS,
+    GRID_OPTIONS,
+    HF_METHODS,
     JOB_TYPES,
     POP_OPTIONS,
-    GRID_OPTIONS,
+    POPLE_BASIS_SETS,
     SCF_GUESS_OPTIONS,
-    GAUSSIAN_SEARCH_CATALOG,
+    SEMI_EMPIRICAL_METHODS,
+    SOLVATION_MODELS,
+    WAVEFUNCTION_METHODS,
 )
-
+from .mixins import Dialog3DPickingMixin
 
 _MODRED_PREFIXES = {1: "X", 2: "B", 3: "A", 4: "D"}
 _MODRED_PREFIX_COUNTS = {"X": 1, "B": 2, "A": 3, "D": 4}
@@ -148,7 +147,7 @@ def _parse_route_token(token):
     """
     if not token or token.startswith("#"):
         return None
-    m = re.match(r"^([^=(]+)(.*)$", token, re.S)
+    m = re.match(r"^([^=(]+)(.*)$", token, re.DOTALL)
     if not m:
         return None
     name, rest = m.group(1), m.group(2).strip()
@@ -225,6 +224,12 @@ def _compute_route_residual(dialog, route):
     original = _route_keywords(route)
     rebuilt = _route_keywords(dialog.preview_str)
     for key, (token, _name, opts) in original.items():
+        represented = {
+            dialog.method_name.currentText().upper(),
+            dialog.basis_set.currentText().upper(),
+        }
+        if not opts and key in represented:
+            continue
         if key not in rebuilt:
             dialog._route_passthrough.extend(_split_route_tokens(token))
             continue
@@ -335,7 +340,6 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         self.tabs.currentChanged.connect(self.on_tab_changed)
 
         layout.addWidget(self.tabs)
-
 
         preview_group = QGroupBox("Route Preview")
         preview_layout = QVBoxLayout()
@@ -551,7 +555,9 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         layout.addRow(self.density_chk)
 
         self.symmetry_combo = QComboBox()
-        self.symmetry_combo.addItems(["Default", "Loose (Symmetry=Loose)", "None (NoSymm)"])
+        self.symmetry_combo.addItems(
+            ["Default", "Loose (Symmetry=Loose)", "None (NoSymm)"]
+        )
         layout.addRow("Symmetry:", self.symmetry_combo)
 
         self.grid_combo = QComboBox()
@@ -780,9 +786,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
 
     def load_modredundant_lines(self, lines):
         """Rebuild the constraint table from tail ModRedundant lines (sync in)."""
-        parsed = [
-            p for p in (parse_modredundant_line(line) for line in lines) if p
-        ]
+        parsed = [p for p in (parse_modredundant_line(line) for line in lines) if p]
         self.constraint_table.setRowCount(0)
         for indices, is_scan, steps, step_size in parsed:
             self._insert_constraint_row(indices, is_scan, steps, step_size)
@@ -953,9 +957,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
 
         if has_scan_row:
             try:
-                scan_job_txt = next(
-                    j for j in JOB_TYPES if j.startswith("Scan")
-                )
+                scan_job_txt = next(j for j in JOB_TYPES if j.startswith("Scan"))
                 if self.job_type.currentText() != scan_job_txt:
                     has_block = hasattr(self.job_type, "blockSignals")
                     if has_block:
@@ -981,7 +983,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             route_parts.append(method)
         else:
             basis = self.basis_set.currentText()
-            mb = f"{method}/{basis}" if basis else method
+            mb = f"{method}/{basis}" if method and basis else method or basis
             second = self.second_basis.text().strip()
             if second:
                 mb += f"//{method}/{second}"
@@ -1050,7 +1052,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         elif job_txt.startswith("Single Point"):
             pass
         elif "Opt=TS" in job_txt:
-            route_parts.append(_opt_token(["TS", "NoEigenTest"]))
+            route_parts.append(_opt_token(["TS"]))
         elif "Scan" in job_txt:
             route_parts.append(_opt_token(["ModRedundant"]))
         elif job_txt == "IRC" or job_txt.startswith("IRC"):
@@ -1135,7 +1137,9 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         route_parts = _apply_route_residual(self, route_parts)
 
         for keyword in getattr(self, "_search_extra_keywords", []):
-            if keyword and not any(keyword.casefold() == part.casefold() for part in route_parts):
+            if keyword and not any(
+                keyword.casefold() == part.casefold() for part in route_parts
+            ):
                 route_parts.append(keyword)
         self.preview_str = " ".join(route_parts)
         self.preview_label.setText(self.preview_str)
@@ -1190,6 +1194,8 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             )
         tokens = _split_route_tokens(route)
         upper_tokens = [t.upper() for t in tokens]
+        self.method_name.setCurrentText("")
+        self.basis_set.setCurrentText("")
 
         # Print level
         if "#P" in upper_tokens or any(t.upper().startswith("#P") for t in tokens):
@@ -1228,6 +1234,12 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
                     continue
                 if t.upper() in [m.upper() for m in ALL_GAUSSIAN_METHODS]:
                     self.method_name.setCurrentText(t)
+                    break
+            for token in tokens:
+                if token.upper() in {
+                    basis.upper() for basis in ALL_GAUSSIAN_BASIS_SETS
+                }:
+                    self.basis_set.setCurrentText(token)
                     break
 
         route_upper = route.upper()
@@ -1419,7 +1431,9 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
                 "Properties & Advanced",
             ]
         )
-        self.search_category_combo.currentIndexChanged.connect(self._filter_search_table)
+        self.search_category_combo.currentIndexChanged.connect(
+            self._filter_search_table
+        )
 
         filter_row.addWidget(QLabel("Search:"))
         filter_row.addWidget(self.search_filter_input, 1)
@@ -1431,7 +1445,9 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         self.search_table.setHorizontalHeaderLabels(
             ["Category", "Keyword", "Description", "Action"]
         )
-        self.search_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.search_table.setSelectionBehavior(
+            QTableWidget.SelectionBehavior.SelectRows
+        )
         self.search_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         self.search_table.horizontalHeader().setStretchLastSection(False)
         self.search_table.cellDoubleClicked.connect(self._on_search_row_double_clicked)
@@ -1439,7 +1455,6 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         layout.addWidget(self.search_table)
         self.tab_search.setLayout(layout)
         self._populate_search_database()
-
 
     def _populate_search_database(self):
         catalog = list(GAUSSIAN_SEARCH_CATALOG)
@@ -1456,7 +1471,6 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         self._search_catalog = catalog
         self._filter_search_table()
 
-
     def _filter_search_table(self, *_signal_args):
         query = (self.search_filter_input.text() or "").strip().lower()
         selected_cat = self.search_category_combo.currentText()
@@ -1465,7 +1479,12 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         for cat, kw, desc in self._search_catalog:
             if selected_cat != "All Categories" and selected_cat != cat:
                 continue
-            if query and query not in kw.lower() and query not in desc.lower() and query not in cat.lower():
+            if (
+                query
+                and query not in kw.lower()
+                and query not in desc.lower()
+                and query not in cat.lower()
+            ):
                 continue
             filtered.append((cat, kw, desc))
 
@@ -1475,10 +1494,11 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             item_kw = QTableWidgetItem(kw)
             item_desc = QTableWidgetItem(desc)
 
-
             btn_apply = QPushButton("Apply")
             btn_apply.setMaximumWidth(70)
-            btn_apply.clicked.connect(lambda _, k=kw, c=cat, b=btn_apply: self._apply_search_item(k, c, b))
+            btn_apply.clicked.connect(
+                lambda _, k=kw, c=cat, b=btn_apply: self._apply_search_item(k, c, b)
+            )
 
             self.search_table.setItem(row, 0, item_cat)
             self.search_table.setItem(row, 1, item_kw)
@@ -1504,7 +1524,9 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             return
         if not hasattr(self, "_search_extra_keywords"):
             self._search_extra_keywords = []
-        if keyword.casefold() not in {item.casefold() for item in self._search_extra_keywords}:
+        if keyword.casefold() not in {
+            item.casefold() for item in self._search_extra_keywords
+        }:
             self._search_extra_keywords.append(keyword)
 
     def _apply_search_item(self, keyword, category, btn=None):
@@ -1586,4 +1608,3 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         if btn is not None and hasattr(btn, "setText"):
             btn.setText("Applied!")
             QtCore.QTimer.singleShot(1000, lambda: _restore_apply_button(btn))
-

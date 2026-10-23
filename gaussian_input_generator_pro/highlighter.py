@@ -1,5 +1,5 @@
-from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
 from PySide6.QtCore import QRegularExpression
+from PySide6.QtGui import QColor, QFont, QSyntaxHighlighter, QTextCharFormat
 
 
 class GaussianSyntaxHighlighter(QSyntaxHighlighter):
@@ -40,7 +40,8 @@ class GaussianSyntaxHighlighter(QSyntaxHighlighter):
         self.rules.append(
             (
                 QRegularExpression(
-                    r"^--Link1--\s*$", QRegularExpression.PatternOption.CaseInsensitiveOption
+                    r"^--Link1--\s*$",
+                    QRegularExpression.PatternOption.CaseInsensitiveOption,
                 ),
                 link1_format,
             )
@@ -55,9 +56,7 @@ class GaussianSyntaxHighlighter(QSyntaxHighlighter):
         marker_format = QTextCharFormat()
         marker_format.setForeground(QColor("#388E3C"))  # Green
         marker_format.setFontWeight(QFont.Weight.Bold)
-        self.rules.append(
-            (QRegularExpression(r"^\s*-?\d+\s+\d+\s*$"), marker_format)
-        )
+        self.rules.append((QRegularExpression(r"^\s*-?\d+\s+\d+\s*$"), marker_format))
         self.rules.append(
             (
                 QRegularExpression(

@@ -472,6 +472,7 @@ class TestGenerateInputContent(_RealDialogTestCase):
         dlg.link1_enable.setChecked(True)
         idx = dlg.link1_geom_src.findText("Copy coordinates")
         dlg.link1_geom_src.setCurrentIndex(idx)
+        dlg.link1_route_edit.setPlainText("# HF/STO-3G Freq")
         content = dlg.generate_input_content()
         link1_part = content.split("--Link1--")[1]
         self.assertTrue(any(l.startswith("O") for l in link1_part.splitlines()))

@@ -433,7 +433,7 @@ GAUSSIAN_SEARCH_CATALOG = [
         "Opt=QST3",
         "Synchronous Transit-Guided Quasi-Newton TS search using reactant, product, and TS guess",
     ),
-    ("Job Types", "Opt=CalcHess", "Calculate exact analytical Hessian at first step"),
+    ("Job Types", "Opt=CalcFC", "Calculate exact analytical Hessian at first step"),
     (
         "Job Types",
         "Opt=Cartesian",
@@ -504,7 +504,7 @@ GAUSSIAN_SEARCH_CATALOG = [
     ),
     (
         "Methods / Functionals",
-        "M06-2X",
+        "M062X",
         "Truhlar hybrid meta-GGA (54% HF exchange, main-group kinetics)",
     ),
     (

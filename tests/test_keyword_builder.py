@@ -206,7 +206,17 @@ def _make_dialog():
         ],
         2,
     )
-    dlg.method_type = _Combo(["DFT", "Double Hybrid", "Wavefunction (MP2/CC)", "Hartree-Fock", "Semi-Empirical", "All Methods"], 0)
+    dlg.method_type = _Combo(
+        [
+            "DFT",
+            "Double Hybrid",
+            "Wavefunction (MP2/CC)",
+            "Hartree-Fock",
+            "Semi-Empirical",
+            "All Methods",
+        ],
+        0,
+    )
     dlg.method_name = _Combo(["B3LYP"], 0)
     dlg.basis_set = _Combo(["6-31G(d)"], 0)
     dlg.second_basis = _LineEdit("")
@@ -236,7 +246,9 @@ def _make_dialog():
 
     dlg.pop_combo = _Combo(POP_OPTIONS, 0)
     dlg.density_chk = _Check(False)
-    dlg.symmetry_combo = _Combo(["Default", "Loose (Symmetry=Loose)", "None (NoSymm)"], 0)
+    dlg.symmetry_combo = _Combo(
+        ["Default", "Loose (Symmetry=Loose)", "None (NoSymm)"], 0
+    )
     dlg.grid_combo = _Combo(GRID_OPTIONS, 0)
 
     dlg.td_method = _Combo(["None", "TD", "TDA"], 0)
@@ -256,8 +268,12 @@ def _make_dialog():
     dlg.update_preview = lambda: GaussianRouteBuilderDialog.update_preview(dlg)
     dlg.get_route = lambda: GaussianRouteBuilderDialog.get_route(dlg)
     dlg.parse_route = lambda route: GaussianRouteBuilderDialog.parse_route(dlg, route)
-    dlg._parse_route_impl = lambda route: GaussianRouteBuilderDialog._parse_route_impl(dlg, route)
-    dlg.get_modredundant_lines = lambda: GaussianRouteBuilderDialog.get_modredundant_lines(dlg)
+    dlg._parse_route_impl = lambda route: GaussianRouteBuilderDialog._parse_route_impl(
+        dlg, route
+    )
+    dlg.get_modredundant_lines = lambda: (
+        GaussianRouteBuilderDialog.get_modredundant_lines(dlg)
+    )
 
     dlg.update_preview()
     return dlg
@@ -373,7 +389,7 @@ class TestRouteBuilderJobTypes(unittest.TestCase):
         dlg.update_preview()
         route = dlg.get_route()
         self.assertIn("Opt=(TS", route)
-        self.assertIn("NoEigenTest", route)
+        self.assertNotIn("NoEigenTest", route)
 
     def test_scan_job_sets_modredundant(self):
         dlg = _make_dialog()
@@ -573,9 +589,7 @@ class TestScanRowForcesJobType(unittest.TestCase):
     def test_freeze_only_rows_preserve_opt_freq_job(self):
         dlg = _make_dialog()
         dlg.job_type.setCurrentIndex(0)  # Optimization + Freq (Opt Freq)
-        dlg.constraint_table = _FakeConstraintTable(
-            [{"indices": "1 2", "scan": False}]
-        )
+        dlg.constraint_table = _FakeConstraintTable([{"indices": "1 2", "scan": False}])
         dlg.update_preview()
         route = dlg.get_route()
         self.assertIn("Opt=(ModRedundant", route)
