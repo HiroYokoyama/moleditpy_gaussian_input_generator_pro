@@ -158,9 +158,10 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
         self.calc_initial_charge_mult()
         self._restore_generated_charge_mult(saved_charge_mult)
         self.ui_ready = True
-        self.update_preview()  # earlier calls no-op'd while ui_ready was False
         if isinstance(saved_text, str):
             self.restore_input_text(saved_text, restore_structure=False)
+        else:
+            self.update_preview()
 
     # ------------------------------------------------------------------
     # UI construction
@@ -935,7 +936,16 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
 
         chk = self.chk_edit.text().strip()
         if not chk:
-            chk = f"{self._wfn_filename_hint()}.chk"
+            chk = (getattr(self, "persistent_settings", None) or {}).get(
+                "generated_chk"
+            )
+            if not isinstance(chk, str) or not chk:
+                base = (
+                    os.path.splitext(os.path.basename(self.current_inp_file))[0]
+                    if getattr(self, "current_inp_file", None)
+                    else self._wfn_filename_hint()
+                )
+                chk = f"{base}.chk"
         if not chk.lower().endswith(".chk"):
             chk += ".chk"
         lines.append(f"%chk={chk}")
@@ -1210,6 +1220,13 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
                     content = self._rewrite_chk(content, saved_base)
 
                 write_input(file_path, content)
+                if (
+                    not getattr(self, "_text_override", False)
+                    and not self.chk_edit.text().strip()
+                ):
+                    self._remember_generated_reference(
+                        "generated_chk", f"{saved_base}.chk"
+                    )
 
                 if getattr(self, "_text_override", False):
                     self.preview_text.setPlainText(content)
@@ -1474,6 +1491,8 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
 
     def _update_title(self):
         base = f"{PLUGIN_NAME} v{PLUGIN_VERSION}"
+        if getattr(self, "_project_detached", False):
+            base += " — Detached input"
         if self.current_inp_file:
             name = os.path.basename(self.current_inp_file)
             dirty = " *" if self._is_modified() else ""
@@ -1493,6 +1512,11 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
             ):
                 content = self._rewrite_chk(content, saved_base)
             write_input(self.current_inp_file, content)
+            if (
+                not getattr(self, "_text_override", False)
+                and not self.chk_edit.text().strip()
+            ):
+                self._remember_generated_reference("generated_chk", f"{saved_base}.chk")
             if getattr(self, "_text_override", False):
                 self.preview_text.setPlainText(content)
             else:
