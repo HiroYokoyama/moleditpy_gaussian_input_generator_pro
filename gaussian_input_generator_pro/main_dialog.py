@@ -32,7 +32,12 @@ from rdkit.Chem import rdMolTransforms
 from . import PLUGIN_NAME, PLUGIN_VERSION, SETTINGS_FILE, cluster_link
 from .constants import TAIL_TEMPLATES
 from .highlighter import GaussianSyntaxHighlighter
-from .input_loading import InputLoadingMixin, checkpoint_geometry, coordinates_for_route
+from .input_loading import (
+    InputLoadingMixin,
+    checkpoint_geometry,
+    coordinates_for_route,
+    write_input,
+)
 from .keyword_builder import GaussianRouteBuilderDialog, parse_modredundant_line
 
 # Priority order used for auto-suffix detection (first match wins).
@@ -139,6 +144,7 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
         self.get_molecule = get_molecule
         self.display_molecule = display_molecule
         saved_text = (persistent_settings or {}).get("input_text")
+        saved_charge_mult = (persistent_settings or {}).get("generated_charge_mult")
         self._text_override = False
         self.current_inp_file = None  # path of the .gjf file last saved/opened
         self._saved_inp_content = None  # content at last save (for dirty detection)
@@ -150,10 +156,12 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
         self.load_presets_from_file()
         self.load_persistent_settings()
         self.calc_initial_charge_mult()
+        self._restore_generated_charge_mult(saved_charge_mult)
         self.ui_ready = True
-        self.update_preview()  # earlier calls no-op'd while ui_ready was False
         if isinstance(saved_text, str):
-            self.restore_input_text(saved_text)
+            self.restore_input_text(saved_text, restore_structure=False)
+        else:
+            self.update_preview()
 
     # ------------------------------------------------------------------
     # UI construction
@@ -802,6 +810,7 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
 
         if self.persistent_settings is not None:
             p = self.persistent_settings
+            self._store_generated_charge_mult()
             p["nproc"] = self.nproc_spin.value()
             p["mem_val"] = self.mem_spin.value()
             p["mem_unit"] = self.mem_unit.currentText()
@@ -837,17 +846,19 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
         try:
             p = self.persistent_settings
             if "nproc" in p:
-                self.nproc_spin.setValue(p["nproc"])
+                self._restore_spin_value(self.nproc_spin, p["nproc"])
             if "mem_val" in p:
-                self.mem_spin.setValue(p["mem_val"])
+                self._restore_spin_value(self.mem_spin, p["mem_val"])
             if "mem_unit" in p:
+                if self.mem_unit.findText(p["mem_unit"]) < 0:
+                    self.mem_unit.addItem(p["mem_unit"])
                 self.mem_unit.setCurrentText(p["mem_unit"])
             if "chk" in p:
                 self.chk_edit.setText(p["chk"])
             if "oldchk" in p:
                 self.oldchk_edit.setText(p["oldchk"])
             if "route" in p:
-                self.keywords_edit.setText(p["route"])
+                self.keywords_edit.setPlainText(p["route"])
             if "comment" in p:
                 self.comment_edit.setText(p["comment"])
             if "tail" in p:
@@ -925,7 +936,16 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
 
         chk = self.chk_edit.text().strip()
         if not chk:
-            chk = f"{self._wfn_filename_hint()}.chk"
+            chk = (getattr(self, "persistent_settings", None) or {}).get(
+                "generated_chk"
+            )
+            if not isinstance(chk, str) or not chk:
+                base = (
+                    os.path.splitext(os.path.basename(self.current_inp_file))[0]
+                    if getattr(self, "current_inp_file", None)
+                    else self._wfn_filename_hint()
+                )
+                chk = f"{base}.chk"
         if not chk.lower().endswith(".chk"):
             chk += ".chk"
         lines.append(f"%chk={chk}")
@@ -1199,8 +1219,14 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
                 ):
                     content = self._rewrite_chk(content, saved_base)
 
-                with open(file_path, "w", encoding="utf-8") as f:
-                    f.write(content)
+                write_input(file_path, content)
+                if (
+                    not getattr(self, "_text_override", False)
+                    and not self.chk_edit.text().strip()
+                ):
+                    self._remember_generated_reference(
+                        "generated_chk", f"{saved_base}.chk"
+                    )
 
                 if getattr(self, "_text_override", False):
                     self.preview_text.setPlainText(content)
@@ -1465,6 +1491,8 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
 
     def _update_title(self):
         base = f"{PLUGIN_NAME} v{PLUGIN_VERSION}"
+        if getattr(self, "_project_detached", False):
+            base += " — Detached input"
         if self.current_inp_file:
             name = os.path.basename(self.current_inp_file)
             dirty = " *" if self._is_modified() else ""
@@ -1483,8 +1511,12 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
                 and not self.chk_edit.text().strip()
             ):
                 content = self._rewrite_chk(content, saved_base)
-            with open(self.current_inp_file, "w", encoding="utf-8") as f:
-                f.write(content)
+            write_input(self.current_inp_file, content)
+            if (
+                not getattr(self, "_text_override", False)
+                and not self.chk_edit.text().strip()
+            ):
+                self._remember_generated_reference("generated_chk", f"{saved_base}.chk")
             if getattr(self, "_text_override", False):
                 self.preview_text.setPlainText(content)
             else:

@@ -257,7 +257,7 @@ class TestInitialize(unittest.TestCase):
         save_fn = ctx.register_save_handler.call_args[0][0]
         self.assertIsNone(save_fn())
 
-    def test_reset_deferred_when_dialog_close_is_cancelled(self):
+    def test_reset_detaches_input_when_dialog_close_is_cancelled(self):
         ctx = self._make_context()
         _init._dialog_opened = True
         _init.initialize(ctx)
@@ -275,8 +275,8 @@ class TestInitialize(unittest.TestCase):
         dlg.close.assert_called_once()
         save_fn = ctx.register_save_handler.call_args[0][0]
         saved = save_fn()
-        self.assertIsNotNone(saved)
-        self.assertEqual(saved["nproc"], 99)
+        dlg.detach_project.assert_called_once()
+        self.assertIsNone(saved)
 
     def test_reset_proceeds_when_dialog_closes_successfully(self):
         ctx = self._make_context()
