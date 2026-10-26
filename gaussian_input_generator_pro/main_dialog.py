@@ -435,6 +435,12 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
         # --- Right Side: Preview ---
         preview_group = QGroupBox("Input Preview")
         preview_layout = QVBoxLayout()
+        preview_actions = QHBoxLayout()
+        preview_actions.addStretch()
+        self.load_btn = QPushButton("Load Input File...")
+        self.load_btn.clicked.connect(self.load_input_file)
+        preview_actions.addWidget(self.load_btn)
+        preview_layout.addLayout(preview_actions)
         self.preview_text = QTextEdit()
         self.preview_text.textChanged.connect(self._input_text_edited)
         self.preview_text.setReadOnly(False)
@@ -499,9 +505,6 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
         self.submit_btn.setVisible(cluster_link.is_available(self.parent()))
 
         btn_layout.addWidget(self.btn_close)
-        self.load_btn = QPushButton("Load Input File...")
-        self.load_btn.clicked.connect(self.load_input_file)
-        btn_layout.addWidget(self.load_btn)
         btn_layout.addWidget(self.submit_btn)
         btn_layout.addWidget(self.save_btn)
 
