@@ -310,19 +310,3 @@ Provided *as is* without warranty. Users are responsible for validating outputs 
 ## Licensing scope
 
 First-party code in this migration is LGPL-3.0-or-later. See [LICENSE](LICENSE), [COPYING](COPYING) and [dependency/provenance terms](LICENSING.md). Third-party components and historical releases retain their own terms.
-
-## Input correctness audit (2026-10-24)
-
-Generated coordinates honor each job's explicit length/angle units. Loading an
-input and refreshing it preserves ghost-atom identity and physical bond lengths.
-Builders retain omitted/default basis choices rather than injecting their own
-default basis into an existing input. The complete imported/edited text remains
-authoritative until Reset/Refresh.
-
-`Geom=Check` omits coordinates; `Geom=AllCheck` also omits title and
-charge/multiplicity. Job 2 continues Job 1's checkpoint without recopying
-`%oldchk`. Choosing Checkpoint for Job 2 adds `Geom=Check` if missing; explicit
-checkpoint route keywords take precedence over Copy coordinates. A TS job no
-longer adds `NoEigenTest` automatically.
-
-See [the audit record](docs/INPUT_AUDIT.md) for sources and validation limits.
