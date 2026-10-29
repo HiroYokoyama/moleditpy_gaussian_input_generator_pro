@@ -1,5 +1,35 @@
 # MoleditPy Gaussian Input Generator Pro
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21307661.svg)](https://doi.org/10.5281/zenodo.21307661)
+[![Tests](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/actions/workflows/tests.yml/badge.svg)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/actions/workflows/tests.yml)
+![Test Coverage](https://img.shields.io/badge/coverage->90%25-green)
+[![MoleditPy](https://img.shields.io/badge/MoleditPy->=5.0.0-3577F7)](https://github.com/HiroYokoyama/python_molecular_editor)
+[![GitHub tag](https://img.shields.io/github/v/tag/HiroYokoyama/moleditpy_gaussian_input_generator_pro?label=version)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/tags)
+[![GitHub Downloads](https://img.shields.io/github/downloads/HiroYokoyama/moleditpy_gaussian_input_generator_pro/total)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/releases)
+
+An advanced **Gaussian 16 Input Generator** plugin for **MoleditPy**, designed to streamline the creation of Gaussian `.gjf`/`.com` calculation input files with a focus on usability, automation, and multi-job (`--Link1--`) workflows.
+
+Repo: [https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro)
+
+---
+
+## Key Features
+
+- **Route Builder** — tabbed GUI covering methods, job types, solvation, dispersion, TD-DFT, and other advanced route options
+- **Real-time Preview** — generated route line and full `.gjf` file update instantly as you make changes
+- **Round-trip Parsing** — reopen the Route Builder on an existing route and settings are restored into the UI
+- **Link 0 Automation** — `%nprocshared`, `%mem`, `%chk` (auto-named from the saved filename), optional `%oldchk`
+- **Job Manager Relay Tag** — tick a box to fill `%oldchk` with a configurable tag (`[prevfile:.chk]` by default) instead of a literal filename; the Job Manager plugin resolves it to the real checkpoint from whichever job you pick when this input is submitted. The tag text is editable and can be saved as the default for new documents
+- **Additional Job (`--Link1--`)** — append a second job that reads the checkpoint (`Geom=Check Guess=Read`) or copies the current geometry
+- **Z-Matrix Output** — emit coordinates as Cartesian, Gaussian Z-matrix, or Z-matrix with a `Variables:` section
+- **Interactive Constraints & Scans** — click atoms in the MoleditPy 3D viewer to define ModRedundant freeze/scan lines (distance/angle/dihedral); `Opt=ModRedundant` is added to the route automatically
+- **Tail Templates** — one-click insertion of `ModRedundant`, `Gen`/`GenECP` basis blocks, `$NBO`, connectivity, and `--Link1--` stubs
+- **Syntax Highlighting** — `.gjf` files get colour-coded Link 0 lines, route keywords, and job separators
+- **Session Persistence** — last-used settings are saved and restored between sessions
+- **Preset Management** — save/apply/delete named configuration presets, plus a global "Auto Suffix" toggle
+
+---
+
 ## Loading existing inputs
 
 `.gjf` and `.com` files are registered with MoleditPy's file-opener registry and
@@ -47,34 +77,6 @@ If an input editor remains open after the host resets its document, its
 unsaved text is retained in a detached editor. It cannot modify the next
 project's molecule or saved input; opening the generator creates a separate
 editor for the new project.
-
-[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.21307661.svg)](https://doi.org/10.5281/zenodo.21307661)
-[![Tests](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/actions/workflows/tests.yml/badge.svg)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/actions/workflows/tests.yml)
-![Test Coverage](https://img.shields.io/badge/coverage->90%25-green)
-[![MoleditPy](https://img.shields.io/badge/MoleditPy->=5.0.0-3577F7)](https://github.com/HiroYokoyama/python_molecular_editor)
-[![GitHub tag](https://img.shields.io/github/v/tag/HiroYokoyama/moleditpy_gaussian_input_generator_pro?label=version)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/tags)
-[![GitHub Downloads](https://img.shields.io/github/downloads/HiroYokoyama/moleditpy_gaussian_input_generator_pro/total)](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro/releases)
-
-An advanced **Gaussian 16 Input Generator** plugin for **MoleditPy**, designed to streamline the creation of Gaussian `.gjf`/`.com` calculation input files with a focus on usability, automation, and multi-job (`--Link1--`) workflows.
-
-Repo: [https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro](https://github.com/HiroYokoyama/moleditpy_gaussian_input_generator_pro)
-
----
-
-## Key Features
-
-- **Route Builder** — tabbed GUI covering methods, job types, solvation, dispersion, TD-DFT, and other advanced route options
-- **Real-time Preview** — generated route line and full `.gjf` file update instantly as you make changes
-- **Round-trip Parsing** — reopen the Route Builder on an existing route and settings are restored into the UI
-- **Link 0 Automation** — `%nprocshared`, `%mem`, `%chk` (auto-named from the saved filename), optional `%oldchk`
-- **Job Manager Relay Tag** — tick a box to fill `%oldchk` with a configurable tag (`[prevfile:.chk]` by default) instead of a literal filename; the Job Manager plugin resolves it to the real checkpoint from whichever job you pick when this input is submitted. The tag text is editable and can be saved as the default for new documents
-- **Additional Job (`--Link1--`)** — append a second job that reads the checkpoint (`Geom=Check Guess=Read`) or copies the current geometry
-- **Z-Matrix Output** — emit coordinates as Cartesian, Gaussian Z-matrix, or Z-matrix with a `Variables:` section
-- **Interactive Constraints & Scans** — click atoms in the MoleditPy 3D viewer to define ModRedundant freeze/scan lines (distance/angle/dihedral); `Opt=ModRedundant` is added to the route automatically
-- **Tail Templates** — one-click insertion of `ModRedundant`, `Gen`/`GenECP` basis blocks, `$NBO`, connectivity, and `--Link1--` stubs
-- **Syntax Highlighting** — `.gjf` files get colour-coded Link 0 lines, route keywords, and job separators
-- **Session Persistence** — last-used settings are saved and restored between sessions
-- **Preset Management** — save/apply/delete named configuration presets, plus a global "Auto Suffix" toggle
 
 ---
 
