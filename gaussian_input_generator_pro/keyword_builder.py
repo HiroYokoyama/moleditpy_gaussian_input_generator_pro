@@ -46,6 +46,7 @@ from .constants import (
     WAVEFUNCTION_METHODS,
 )
 from .mixins import Dialog3DPickingMixin
+from .wheel_guard import install_wheel_guard
 
 _MODRED_PREFIXES = {1: "X", 2: "B", 3: "A", 4: "D"}
 _MODRED_PREFIX_COUNTS = {"X": 1, "B": 2, "A": 3, "D": 4}
@@ -590,6 +591,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
 
         scroll = QScrollArea()
         scroll.setWidget(inner)
+        install_wheel_guard(inner)
         scroll.setWidgetResizable(True)
         scroll.setFrameShape(QScrollArea.Shape.NoFrame)
 
