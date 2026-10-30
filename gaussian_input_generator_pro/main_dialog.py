@@ -39,6 +39,7 @@ from .input_loading import (
     write_input,
 )
 from .keyword_builder import GaussianRouteBuilderDialog, parse_modredundant_line
+from .wheel_guard import install_wheel_guard
 
 # Priority order used for auto-suffix detection (first match wins).
 _AUTO_SUFFIX_RULES = [
@@ -436,6 +437,7 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
 
         settings_layout.addStretch()
         scroll_area.setWidget(settings_container)
+        install_wheel_guard(settings_container)
         content_layout.addWidget(scroll_area, 3)
 
         # --- Right Side: Preview ---

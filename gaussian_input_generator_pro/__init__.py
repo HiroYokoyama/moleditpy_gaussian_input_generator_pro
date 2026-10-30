@@ -4,7 +4,7 @@ import os
 from PySide6.QtWidgets import QMessageBox
 
 PLUGIN_NAME = "Gaussian Input Generator Pro"
-PLUGIN_VERSION = "2.1.4"
+PLUGIN_VERSION = "2.1.5"
 PLUGIN_AUTHOR = "HiroYokoyama"
 
 
