@@ -56,6 +56,13 @@ _MODRED_LINE_RE = re.compile(
 )
 
 
+def format_step_size(value):
+    """A scan step with at least two decimals and none of its digits rounded away."""
+    text = f"{float(value):.6f}".rstrip("0")
+    whole, _, decimals = text.partition(".")
+    return f"{whole}.{decimals.ljust(2, '0')}"
+
+
 def format_modredundant_line(indices, is_scan=False, steps=10, step_size=0.1):
     """Format a Gaussian ModRedundant line from 1-based atom indices.
 
@@ -66,7 +73,7 @@ def format_modredundant_line(indices, is_scan=False, steps=10, step_size=0.1):
         raise ValueError(f"ModRedundant needs 1-4 atoms, got {len(indices)}")
     idx_str = " ".join(str(i) for i in indices)
     if is_scan:
-        return f"{prefix} {idx_str} S {int(steps)} {float(step_size):.2f}"
+        return f"{prefix} {idx_str} S {int(steps)} {format_step_size(step_size)}"
     return f"{prefix} {idx_str} F"
 
 
@@ -783,7 +790,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
         if step_size is None:
             step_size = 0.1 if n == 2 else 10.0  # Å for bonds, degrees otherwise
         self.constraint_table.setItem(
-            row, 5, create_centered_item(f"{float(step_size):.2f}")
+            row, 5, create_centered_item(format_step_size(step_size))
         )
 
     def load_modredundant_lines(self, lines):

@@ -148,6 +148,17 @@ class TestFormatModredundantLine(unittest.TestCase):
             "D 5 6 7 8 S 36 10.00",
         )
 
+    def test_a_fine_scan_step_is_not_rounded(self):
+        """0.025 used to be written as 0.03, silently changing the scan."""
+        self.assertEqual(
+            format_modredundant_line([1, 2], is_scan=True, steps=20, step_size=0.025),
+            "B 1 2 S 20 0.025",
+        )
+        self.assertEqual(
+            format_modredundant_line([1, 2, 3], is_scan=True, steps=12, step_size=-2.5),
+            "A 1 2 3 S 12 -2.50",
+        )
+
     def test_invalid_atom_counts(self):
         with self.assertRaises(ValueError):
             format_modredundant_line([])
