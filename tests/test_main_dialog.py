@@ -340,6 +340,14 @@ class TestWfnOutputLine(unittest.TestCase):
         content = dlg.generate_input_content()
         self.assertIn("mol.wfx", content)
 
+    def test_wfn_line_is_its_own_section_after_a_tail(self):
+        """Gaussian reads the file name as the next blank-separated section; run
+        straight on after a Gen basis it would be read as part of the basis."""
+        dlg = _make_dialog(route="#P B3LYP/Gen Output=WFN", filename="mol.xyz")
+        dlg.tail_edit = _TextEdit("C 0\n6-31G(d)\n****")
+        content = dlg.generate_input_content()
+        self.assertTrue(content.endswith("****\n\nmol.wfn\n\n"), repr(content))
+
     def test_no_wfn_line_by_default(self):
         dlg = _make_dialog()
         content = dlg.generate_input_content()

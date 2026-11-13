@@ -993,6 +993,8 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
         )
         if output:
             ext = output[1].lower()
+            if tail:
+                lines.append("")  # its own section, as in the Link1 step
             lines.append(f"{self._wfn_filename_hint()}.{ext}")
 
         # Trim trailing blanks, then require exactly two trailing newlines.
