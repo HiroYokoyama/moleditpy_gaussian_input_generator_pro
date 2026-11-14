@@ -134,7 +134,7 @@ AM1, PM3, PM6, PM7, ZINDO
 
 | Property | Route keyword |
 |----------|---------------|
-| Population analysis | `Pop=NBO / NBORead / Hirshfeld / MK / CHelpG / Reg / Full` |
+| Population analysis | `Pop=NBO / NBORead / NBO6 / NBO6Read / NBO7 / NBO7Read / Hirshfeld / MK / CHelpG / Reg / Full` |
 | Current density | `Density=Current` |
 | Symmetry control | `Symmetry=Loose` / `NoSymm` |
 | Integration grid | `Integral(FineGrid/UltraFine/SuperFine)` |
@@ -220,7 +220,7 @@ $NBO
 $END
 ```
 
-> The plugin detects `Pop=NBORead` in the route and inserts the `$NBO` block for you.
+> The plugin detects `Pop=NBORead` (or `NBO6Read` / `NBO7Read`) in the route and inserts the `$NBO` block for you.
 
 ---
 
