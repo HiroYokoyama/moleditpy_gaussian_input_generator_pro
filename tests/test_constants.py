@@ -120,7 +120,19 @@ class TestJobAndTailData(unittest.TestCase):
             self.assertIn(o, _c.FREQ_OPTIONS)
 
     def test_pop_options(self):
-        for o in ["NBO", "NBORead", "Hirshfeld", "MK", "CHelpG", "Reg", "Full"]:
+        for o in [
+            "NBO",
+            "NBORead",
+            "NBO6",
+            "NBO6Read",
+            "NBO7",
+            "NBO7Read",
+            "Hirshfeld",
+            "MK",
+            "CHelpG",
+            "Reg",
+            "Full",
+        ]:
             self.assertIn(o, _c.POP_OPTIONS)
 
     def test_grid_options(self):

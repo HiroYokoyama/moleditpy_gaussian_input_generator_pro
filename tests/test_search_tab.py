@@ -84,16 +84,16 @@ def test_gaussian_search_guess_read_wires_the_combo_not_the_route_text():
     assert dlg._search_extra_keywords == []
 
 
-def test_gaussian_search_guess_hcore_has_no_combo_entry_so_falls_back():
-    # HCore/Alter are not in SCF_GUESS_OPTIONS at all, so there is nothing to
+def test_gaussian_search_guess_core_has_no_combo_entry_so_falls_back():
+    # Core/Alter are not in SCF_GUESS_OPTIONS at all, so there is nothing to
     # wire them to -- the raw-keyword fallback is correct here.
     dlg = types.SimpleNamespace(_search_extra_keywords=[], update_preview=MagicMock())
     dlg._add_search_keyword = lambda keyword: GaussianRouteBuilderDialog._add_search_keyword(dlg, keyword)
     dlg._apply_search_item = lambda keyword, category, btn=None: GaussianRouteBuilderDialog._apply_search_item(dlg, keyword, category, btn)
 
-    dlg._apply_search_item("Guess=HCore", "Convergence & SCF")
+    dlg._apply_search_item("Guess=Core", "Convergence & SCF")
 
-    assert dlg._search_extra_keywords == ["Guess=HCore"]
+    assert dlg._search_extra_keywords == ["Guess=Core"]
 
 
 def test_gaussian_search_nosymm_wires_the_symmetry_combo():
@@ -107,3 +107,25 @@ def test_gaussian_search_nosymm_wires_the_symmetry_combo():
 
     dlg.symmetry_combo.setCurrentText.assert_called_once_with("None (NoSymm)")
     assert dlg._search_extra_keywords == []
+
+def test_gaussian_search_pop_nbo6_nbo7_wire_the_pop_combo():
+    # Every Pop= entry the combo offers must select it there rather than
+    # being appended as a second, conflicting Pop= keyword.
+    for value in ("NBO", "NBORead", "NBO6", "NBO6Read", "NBO7", "NBO7Read"):
+        dlg = types.SimpleNamespace(pop_combo=MagicMock(), _search_extra_keywords=[], update_preview=MagicMock())
+        dlg._add_search_keyword = lambda keyword, dlg=dlg: GaussianRouteBuilderDialog._add_search_keyword(dlg, keyword)
+
+        GaussianRouteBuilderDialog._apply_search_item(dlg, f"Pop={value}", "Population & Output")
+
+        dlg.pop_combo.setCurrentText.assert_called_once_with(value)
+        assert dlg._search_extra_keywords == []
+
+
+def test_gaussian_search_pop_without_combo_entry_falls_back():
+    dlg = types.SimpleNamespace(pop_combo=MagicMock(), _search_extra_keywords=[], update_preview=MagicMock())
+    dlg._add_search_keyword = lambda keyword: GaussianRouteBuilderDialog._add_search_keyword(dlg, keyword)
+
+    GaussianRouteBuilderDialog._apply_search_item(dlg, "Pop=NaturalOrbitals", "Population & Output")
+
+    dlg.pop_combo.setCurrentText.assert_not_called()
+    assert dlg._search_extra_keywords == ["Pop=NaturalOrbitals"]

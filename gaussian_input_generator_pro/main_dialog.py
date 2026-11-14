@@ -57,6 +57,9 @@ _AUTO_SUFFIX_RULES = [
 # Degrees from 0/180 within which a Z-matrix reference angle is treated as
 # collinear. Below that the three atoms defining the dihedral's plane are on a
 # line, so the dihedral carries no information.
+# Pop=NBORead / NBO6Read / NBO7Read, alone or inside a Pop=(...) option list.
+_NBO_READ_RE = re.compile(r"POP\s*=\s*\(?[^)\s]*\bNBO[67]?READ\b")
+
 _ZM_LINEAR_TOL_DEG = 8.0
 
 # What the Job Manager plugin's relay feature looks for and replaces with a
@@ -1104,15 +1107,16 @@ class GaussianSetupDialogPro(QDialog, InputLoadingMixin):
     def _auto_insert_tail_for_route(self, route):
         """Insert required tail sections implied by route keywords.
 
-        Mirrors ORCA Pro's _auto_insert_blocks_for_route: Pop=NBORead is
-        meaningless without a $NBO section after the coordinates.
+        Mirrors ORCA Pro's _auto_insert_blocks_for_route: Pop=NBORead (and the NBO 6 /
+        NBO 7 forms NBO6Read / NBO7Read) is meaningless without a $NBO section
+        after the coordinates.
         """
         route_upper = route.upper()
         current = self.tail_edit.toPlainText()
         current_upper = current.upper()
 
         additions = []
-        if "POP=NBOREAD" in route_upper and "$NBO" not in current_upper:
+        if _NBO_READ_RE.search(route_upper) and "$NBO" not in current_upper:
             nbo = TAIL_TEMPLATES.get("NBO Analysis ($NBO)")
             if nbo:
                 additions.append(nbo.rstrip("\n"))
