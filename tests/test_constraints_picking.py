@@ -460,6 +460,16 @@ class TestAutoInsertTailForRoute(unittest.TestCase):
         tail = self._run("#P B3LYP/6-31G(d) Pop=NBO")
         self.assertEqual(tail, "")
 
+    def test_nbo6read_and_nbo7read_insert_nbo_section(self):
+        for pop in ("NBO6Read", "NBO7Read", "(SaveNBOs,NBO7Read)"):
+            tail = self._run(f"#P B3LYP/6-31G(d) Pop={pop} Opt")
+            self.assertIn("$NBO", tail, pop)
+            self.assertIn("$END", tail, pop)
+
+    def test_plain_nbo6_and_nbo7_do_not_insert(self):
+        for pop in ("NBO6", "NBO7"):
+            self.assertEqual(self._run(f"#P B3LYP/6-31G(d) Pop={pop}"), "", pop)
+
     def test_existing_nbo_section_not_duplicated(self):
         existing = "$NBO\n  BNDIDX\n$END\n"
         tail = self._run("#P B3LYP/6-31G(d) Pop=NBORead", existing)

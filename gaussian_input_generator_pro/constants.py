@@ -337,7 +337,20 @@ OPT_OPTIONS = [
 
 FREQ_OPTIONS = ["Raman", "NoRaman", "VCD", "Anharmonic"]
 
-POP_OPTIONS = ["None", "NBO", "NBORead", "Hirshfeld", "MK", "CHelpG", "Reg", "Full"]
+POP_OPTIONS = [
+    "None",
+    "NBO",
+    "NBORead",
+    "NBO6",
+    "NBO6Read",
+    "NBO7",
+    "NBO7Read",
+    "Hirshfeld",
+    "MK",
+    "CHelpG",
+    "Reg",
+    "Full",
+]
 
 GRID_OPTIONS = ["Default", "FineGrid", "UltraFine", "SuperFine"]
 
@@ -369,7 +382,7 @@ TAIL_TEMPLATES = {
         "! Appended at the very end after basis sets if GenECP used\nFe 0\nLanL2DZ\n"
     ),
     "NBO Analysis ($NBO)": (
-        "! Requires Pop=NBORead in route\n$NBO\n  BNDIDX NBOSUM\n$END\n\n"
+        "! Requires Pop=NBORead / NBO6Read / NBO7Read in route\n$NBO\n  BNDIDX NBOSUM\n$END\n\n"
     ),
     "Link1 (Multiple Jobs)": (
         "\n--Link1--\n"
@@ -462,8 +475,16 @@ GAUSSIAN_SEARCH_CATALOG = [
         "Polar",
         "Electric dipole polarizabilities and hyperpolarizabilities",
     ),
-    ("Job Types", "Polar=Opt", "Compute polarizability at each optimization step"),
-    ("Job Types", "HyperPolar", "Compute frequency-dependent hyperpolarizabilities"),
+    (
+        "Job Types",
+        "Polar=OptRot",
+        "Optical rotation (use CPHF=RdFreq to give the frequencies)",
+    ),
+    (
+        "Job Types",
+        "Polar=Gamma",
+        "Second hyperpolarizabilities, same as Polar=(DCSHG,Cubic)",
+    ),
     ("Job Types", "NMR=GIAO", "NMR chemical shielding tensors using GIAO method"),
     (
         "Job Types",
@@ -512,10 +533,10 @@ GAUSSIAN_SEARCH_CATALOG = [
         "M06",
         "Minnesota hybrid meta-GGA functional for transition metals",
     ),
-    ("Methods / Functionals", "M06-L", "Minnesota local pure meta-GGA functional"),
+    ("Methods / Functionals", "M06L", "Minnesota local pure meta-GGA functional"),
     (
         "Methods / Functionals",
-        "M06-HF",
+        "M06HF",
         "Minnesota hybrid functional with 100% HF exchange",
     ),
     (
@@ -523,7 +544,7 @@ GAUSSIAN_SEARCH_CATALOG = [
         "MN15",
         "Kohn-Sham hybrid meta-NGA functional with broad accuracy",
     ),
-    ("Methods / Functionals", "MN15-L", "Local meta-NGA functional"),
+    ("Methods / Functionals", "MN15L", "Local meta-NGA functional"),
     (
         "Methods / Functionals",
         "CAM-B3LYP",
@@ -881,7 +902,7 @@ GAUSSIAN_SEARCH_CATALOG = [
     ),
     (
         "Convergence & SCF",
-        "Guess=HCore",
+        "Guess=Core",
         "Use diagonalized core Hamiltonian as initial guess",
     ),
     (
@@ -895,13 +916,31 @@ GAUSSIAN_SEARCH_CATALOG = [
         "Disable all spatial symmetry constraints (useful for open-shell)",
     ),
     # --- Population Analysis & Output ---
-    ("Population & Output", "Pop=NBO6", "Natural Bond Orbital version 6 analysis"),
-    ("Population & Output", "Pop=NBO7", "Natural Bond Orbital version 7 analysis"),
     ("Population & Output", "Pop=NBO", "Default Natural Bond Orbital analysis"),
     (
         "Population & Output",
         "Pop=NBORead",
         "NBO analysis reading $NBO options keylist in input tail",
+    ),
+    (
+        "Population & Output",
+        "Pop=NBO6",
+        "NBO analysis with the external NBO 6 program",
+    ),
+    (
+        "Population & Output",
+        "Pop=NBO6Read",
+        "External NBO 6 analysis reading the $NBO keylist in input tail",
+    ),
+    (
+        "Population & Output",
+        "Pop=NBO7",
+        "NBO analysis with the external NBO 7 program",
+    ),
+    (
+        "Population & Output",
+        "Pop=NBO7Read",
+        "External NBO 7 analysis reading the $NBO keylist in input tail",
     ),
     (
         "Population & Output",

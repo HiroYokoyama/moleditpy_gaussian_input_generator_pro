@@ -1580,7 +1580,7 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
                     self.grid_combo.setCurrentText(value)
                     applied_to_control = True
             elif keyword in {"Guess=Read", "Guess=Mix"}:
-                # HCore/Alter have no combo entry (SCF_GUESS_OPTIONS is only
+                # Core/Alter have no combo entry (SCF_GUESS_OPTIONS is only
                 # Default/Mix/Read) and fall through to the raw-text fallback
                 # below on purpose.
                 value = keyword.split("=", 1)[1]
@@ -1600,9 +1600,14 @@ class GaussianRouteBuilderDialog(Dialog3DPickingMixin, QDialog):
             elif keyword in {"Output=WFN", "Output=WFX"}:
                 self.output_combo.setCurrentText(keyword.split("=", 1)[1])
                 applied_to_control = True
-            elif keyword == "Pop=NBO":
-                self.pop_combo.setCurrentText("NBO")
-                applied_to_control = True
+            elif keyword.startswith("Pop="):
+                # Every Pop= entry that the combo offers selects it there, so
+                # the route never ends up with two Pop= keywords. The rest
+                # (NaturalOrbitals, ...) fall through to the raw-text fallback.
+                value = keyword.split("=", 1)[1]
+                if value in POP_OPTIONS:
+                    self.pop_combo.setCurrentText(value)
+                    applied_to_control = True
         elif category == "Properties & Advanced":
             if keyword == "NMR=GIAO":
                 self.nmr_chk.setChecked(True)
